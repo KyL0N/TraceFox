@@ -171,6 +171,10 @@ python3 test_server.py              # 终端打印解析后的帧
 | `TRACEFOX_QUEUE_SIZE` | Forwarder 内部队列大小 | `1000` |
 | `GRAFANA_PASSWORD` | Grafana admin 密码 | `tracefox`（请修改） |
 
+## 参与贡献
+
+欢迎对 TraceFox 提出改进和修复。详细信息请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
 ## 指标列表
 
 所有指标以 `tracefox_` 为前缀，主要标签：`host`、`device`、`interface`、`mount`、`group`。
