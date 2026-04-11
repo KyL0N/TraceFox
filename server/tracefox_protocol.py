@@ -34,6 +34,16 @@ def parse_frame(payload: bytes) -> Dict[str, Any]:
     result.update(magic=f"{magic:04x}", version=version, ts=ts, seq=seq)
 
     offset = 12
+    try:
+        return _parse_tlv_entries(payload, offset, result)
+    except (struct.error, ValueError, IndexError):
+        return {}
+
+
+def _parse_tlv_entries(
+    payload: bytes, offset: int, result: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Parse TLV entries from the payload starting at offset."""
     while offset + 2 <= len(payload):
         t, length = struct.unpack(">BB", payload[offset : offset + 2])
         offset += 2

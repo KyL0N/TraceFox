@@ -91,8 +91,15 @@ def frame_to_prometheus(frame: dict, host: str) -> str:
     lines: list[str] = []
     ts_ms = frame.get("ts", int(time.time())) * 1000
 
+    def escape_label_value(s) -> str:
+        s = str(s)
+        s = s.replace("\\", "\\\\")
+        s = s.replace('"', '\\"')
+        s = s.replace("\n", "\\n")
+        return s
+
     def emit(name: str, labels: dict, value):
-        lbl = ",".join(f'{k}="{v}"' for k, v in labels.items())
+        lbl = ",".join(f'{k}="{escape_label_value(v)}"' for k, v in labels.items())
         lines.append(f"{name}{{{lbl}}} {value} {ts_ms}")
 
     hl = {"host": host}
