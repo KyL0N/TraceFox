@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 #define TF_MAGIC           0x5446
 #define TF_VERSION         2
@@ -176,7 +177,6 @@ struct sample_context
 	unsigned long long cpu_total_diff;
 };
 
-
 struct tf_collector
 {
 	const char * name;
@@ -194,7 +194,7 @@ struct tf_collector
 };
 
 /* config helper: add a proc prefix to agent_config */
-static inline void config_add_proc_prefix(struct agent_config * cfg, const char * prefix)
+static inline __attribute__((unused)) void config_add_proc_prefix(struct agent_config * cfg, const char * prefix)
 {
 	if (cfg->proc_prefix_count >= TF_MAX_COMM_PREFIX) {
 		return;

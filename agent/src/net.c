@@ -10,10 +10,10 @@ struct net_ctx
 	int truncated;
 };
 
-static int net_init(struct tf_collector * col, const struct agent_config * cfg)
+static int net_init(struct tf_collector *col, const struct agent_config *cfg)
 {
 	(void)cfg;
-	struct net_ctx * ctx = calloc(1, sizeof(*ctx));
+	struct net_ctx *ctx = calloc(1, sizeof(*ctx));
 	if (!ctx) {
 		return -1;
 	}
@@ -21,7 +21,7 @@ static int net_init(struct tf_collector * col, const struct agent_config * cfg)
 	return 0;
 }
 
-static void net_destroy(struct tf_collector * col)
+static void net_destroy(struct tf_collector *col)
 {
 	if (col && col->ctx) {
 		free(col->ctx);
@@ -29,7 +29,7 @@ static void net_destroy(struct tf_collector * col)
 	}
 }
 
-static int net_collect(struct net_ctx * ctx, const struct agent_config * cfg)
+static int net_collect(struct net_ctx *ctx, const struct agent_config *cfg)
 {
 	(void)cfg;
 
@@ -38,8 +38,8 @@ static int net_collect(struct net_ctx * ctx, const struct agent_config * cfg)
 	char iface[TF_NET_IFACE_BUF] = { 0 };
 	unsigned long long rx_bytes  = 0ULL;
 	unsigned long long tx_bytes  = 0ULL;
-	struct net_entry * entry     = NULL;
-	FILE * net_dev_fp            = NULL;
+	struct net_entry *entry      = NULL;
+	FILE *net_dev_fp             = NULL;
 
 	net_dev_fp = fopen("/proc/net/dev", "r");
 	if (!net_dev_fp) {
@@ -92,17 +92,17 @@ static int net_collect(struct net_ctx * ctx, const struct agent_config * cfg)
 	return 0;
 }
 
-static int net_push(struct net_ctx * ctx, struct tlv_writer * wrt)
+static int net_push(struct net_ctx *ctx, struct tlv_writer *wrt)
 {
 	if (ctx->count == 0) {
 		return 0; /* Nothing to push */
 	}
 
 	uint8_t payload[1 + TF_MAX_INTERFACES * TF_NET_ENTRY_PAYLOAD_LEN] = { 0 };
-	uint8_t * payload_cursor                                          = payload;
+	uint8_t *payload_cursor                                           = payload;
 	size_t idx                                                        = 0;
 	char name[TF_NET_NAME_SIZE]                                       = { 0 };
-	struct net_entry * entry                                          = NULL;
+	struct net_entry *entry                                           = NULL;
 
 	*payload_cursor++ = (uint8_t)ctx->count;
 	for (idx = 0; idx < ctx->count; ++idx) {
@@ -125,10 +125,10 @@ static int net_push(struct net_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_NET, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int net_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
+static int net_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	(void)sctx;
-	struct net_ctx * ctx = (struct net_ctx *)col->ctx;
+	struct net_ctx *ctx = (struct net_ctx *)col->ctx;
 	if (!ctx) return -1;
 
 	if (net_collect(ctx, cfg) != 0) {
@@ -138,9 +138,9 @@ static int net_collect_and_push(struct tf_collector * col, struct tlv_writer * w
 	return net_push(ctx, wrt);
 }
 
-static void net_print(struct tf_collector * col, FILE * out)
+static void net_print(struct tf_collector *col, FILE *out)
 {
-	struct net_ctx * ctx = (struct net_ctx *)col->ctx;
+	struct net_ctx *ctx = (struct net_ctx *)col->ctx;
 	if (!ctx) return;
 
 	(void)fprintf(out, "NET : count=%zu\n", ctx->count);

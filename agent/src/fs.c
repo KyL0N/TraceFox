@@ -11,9 +11,9 @@ struct fs_ctx
 	int truncated;
 };
 
-static const char * const fs_whitelist[] = { "ext4", "ext3", "ext2", "f2fs", "btrfs", "xfs", "vfat", "ntfs", "exfat", NULL };
+static const char *const fs_whitelist[] = { "ext4", "ext3", "ext2", "f2fs", "btrfs", "xfs", "vfat", "ntfs", "exfat", NULL };
 
-static int fs_type_allowed(const char * type)
+static int fs_type_allowed(const char *type)
 {
 	for (size_t i = 0; fs_whitelist[i]; ++i) {
 		if (strcmp(type, fs_whitelist[i]) == 0) {
@@ -24,10 +24,10 @@ static int fs_type_allowed(const char * type)
 	return 0;
 }
 
-static int fs_init(struct tf_collector * col, const struct agent_config * cfg)
+static int fs_init(struct tf_collector *col, const struct agent_config *cfg)
 {
 	(void)cfg;
-	struct fs_ctx * ctx = calloc(1, sizeof(*ctx));
+	struct fs_ctx *ctx = calloc(1, sizeof(*ctx));
 	if (!ctx) {
 		return -1;
 	}
@@ -35,7 +35,7 @@ static int fs_init(struct tf_collector * col, const struct agent_config * cfg)
 	return 0;
 }
 
-static void fs_destroy(struct tf_collector * col)
+static void fs_destroy(struct tf_collector *col)
 {
 	if (col && col->ctx) {
 		free(col->ctx);
@@ -43,11 +43,11 @@ static void fs_destroy(struct tf_collector * col)
 	}
 }
 
-static int fs_collect(struct fs_ctx * ctx, const struct agent_config * cfg)
+static int fs_collect(struct fs_ctx *ctx, const struct agent_config *cfg)
 {
 	(void)cfg;
 
-	FILE * mounts_fp = fopen("/proc/mounts", "r");
+	FILE *mounts_fp = fopen("/proc/mounts", "r");
 	if (!mounts_fp) {
 		ctx->count = 0;
 		return -1;
@@ -71,7 +71,7 @@ static int fs_collect(struct fs_ctx * ctx, const struct agent_config * cfg)
 			continue;
 		}
 
-		struct fs_entry * entry = &ctx->entries[idx++];
+		struct fs_entry *entry = &ctx->entries[idx++];
 		memset(entry, 0, sizeof(*entry));
 		strncpy(entry->mount, mount, sizeof(entry->mount) - 1);
 		entry->mount[sizeof(entry->mount) - 1] = '\0';
@@ -107,16 +107,16 @@ static int fs_collect(struct fs_ctx * ctx, const struct agent_config * cfg)
 	return 0;
 }
 
-static int fs_push(struct fs_ctx * ctx, struct tlv_writer * wrt)
+static int fs_push(struct fs_ctx *ctx, struct tlv_writer *wrt)
 {
 	if (ctx->count == 0) {
 		return 0;
 	}
 
 	uint8_t payload[1 + TF_MAX_FS * TF_FS_ENTRY_PAYLOAD_LEN] = { 0 };
-	uint8_t * payload_cursor                                 = payload;
+	uint8_t *payload_cursor                                  = payload;
 	char name[TF_FS_MOUNT_SIZE]                              = { 0 };
-	struct fs_entry * entry                                  = NULL;
+	struct fs_entry *entry                                   = NULL;
 
 	*payload_cursor++ = (uint8_t)ctx->count;
 	for (size_t entry_idx = 0; entry_idx < ctx->count; ++entry_idx) {
@@ -142,10 +142,10 @@ static int fs_push(struct fs_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_FS, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int fs_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
+static int fs_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	(void)sctx;
-	struct fs_ctx * ctx = (struct fs_ctx *)col->ctx;
+	struct fs_ctx *ctx = (struct fs_ctx *)col->ctx;
 	if (!ctx) return -1;
 
 	if (fs_collect(ctx, cfg) != 0) {
@@ -155,9 +155,9 @@ static int fs_collect_and_push(struct tf_collector * col, struct tlv_writer * wr
 	return fs_push(ctx, wrt);
 }
 
-static void fs_print(struct tf_collector * col, FILE * out)
+static void fs_print(struct tf_collector *col, FILE *out)
 {
-	struct fs_ctx * ctx = (struct fs_ctx *)col->ctx;
+	struct fs_ctx *ctx = (struct fs_ctx *)col->ctx;
 	if (!ctx) return;
 
 	(void)fprintf(out, "FS  : count=%zu\n", ctx->count);
