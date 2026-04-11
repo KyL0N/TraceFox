@@ -251,13 +251,17 @@ static void tracker_add_pid(struct proc_ctx * ctx, const char * comm, long pid)
 		}
 	}
 
-	if (ctx->watch_group_count == 0 && comm_prefix_match(ctx, comm)) {
+	if (ctx->comm_prefix_count == 0) {
 		if (ctx->watch_group_count < MAX_COMM_PREFIX) {
-			strncpy(ctx->watch_groups[0].name, comm, COMM_PREFIX_LEN - 1);
-			ctx->watch_groups[0].name[COMM_PREFIX_LEN - 1] = '\0';
-			ctx->watch_groups[0].list.pids[0]              = pid;
-			ctx->watch_groups[0].list.count                = 1;
-			ctx->watch_group_count                         = 1;
+			size_t g = ctx->watch_group_count;
+			strncpy(ctx->watch_groups[g].name, comm, COMM_PREFIX_LEN - 1);
+			ctx->watch_groups[g].name[COMM_PREFIX_LEN - 1] = '\0';
+			ctx->watch_groups[g].list.pids[0]              = pid;
+			ctx->watch_groups[g].list.count                = 1;
+			ctx->watch_group_count++;
+		}
+		else {
+			(void)fprintf(stderr, "[proc] auto-group limit (%d) reached, dropping: %s\n", MAX_COMM_PREFIX, comm);
 		}
 	}
 }
