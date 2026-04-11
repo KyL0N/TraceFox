@@ -96,7 +96,7 @@ static int fs_collect(struct fs_ctx *ctx, const struct agent_config *cfg)
 	if (idx >= TF_MAX_FS && !ctx->truncated) {
 		if (fscanf(mounts_fp, TF_FSCANF_MOUNTS_FMT, dev, mount, type, opts, &freq, &passno) == 6) { // NOLINT
 			if (fs_type_allowed(type)) {
-				(void)fprintf(stderr, "[fs] mount limit (%d) reached, some filesystems dropped\n", TF_MAX_FS);
+				TF_LOG_WARN("[fs] mount limit (%d) reached, some filesystems dropped", TF_MAX_FS);
 				ctx->truncated = 1;
 			}
 		}
