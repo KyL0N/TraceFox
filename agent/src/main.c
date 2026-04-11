@@ -161,7 +161,7 @@ static int load_config_file(const char * path, struct agent_config * cfg)
 			while (prefix) {
 				prefix = trim_inplace(prefix);
 				if (*prefix != '\0') {
-					proc_add_comm_prefix(prefix);
+					config_add_proc_prefix(cfg, prefix);
 				}
 				prefix = strtok_r(NULL, ",", &saveptr);
 			}
@@ -225,13 +225,10 @@ int main(int argc, char ** argv)
 	struct agent_config cfg                  = {0};
 	struct tlv_writer writer                 = {0};
 
-	/* We must initialize collectors that have config dependencies before parsing config */
-	for (int i = 0; g_collectors[i] != NULL; i++) {
-		if (g_collectors[i]->init) {
-			g_collectors[i]->init(g_collectors[i], &cfg);
-		}
-	}
-
+	/*
+	 * Lifecycle: defaults -> proc init (needed by config parser for proc_add_comm_prefix)
+	 * -> config file + CLI -> remaining collector inits (with full config)
+	 */
 	config_init_from_sources(argc, argv, &cfg);
 
 	while ((opt = getopt(argc, argv, "c:h:p:i:f:P:v")) != -1) {
@@ -256,7 +253,7 @@ int main(int argc, char ** argv)
 			while (prefix) {
 				prefix = trim_inplace(prefix);
 				if (*prefix != '\0') {
-					proc_add_comm_prefix(prefix);
+					config_add_proc_prefix(&cfg, prefix);
 				}
 				prefix = strtok_r(NULL, ",", &saveptr);
 			}
@@ -269,6 +266,16 @@ int main(int argc, char ** argv)
 
 	if (verbose) {
 		print_effective_config(&cfg);
+	}
+
+	for (int i = 0; g_collectors[i] != NULL; i++) {
+		if (g_collectors[i]->init) {
+			int rc = g_collectors[i]->init(g_collectors[i], &cfg);
+			if (rc != 0) {
+				(void)fprintf(stderr, "[%s] init failed (rc=%d), aborting\n", g_collectors[i]->name, rc);
+				return 1;
+			}
+		}
 	}
 
 	(void)signal(SIGINT, handle_signal);

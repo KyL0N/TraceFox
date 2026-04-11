@@ -84,11 +84,16 @@
 #define TF_TYPE_FS   0x06
 #define TF_TYPE_PROC 0x07
 
+#define TF_MAX_COMM_PREFIX 32
+#define TF_COMM_PREFIX_LEN 32
+
 struct agent_config
 {
 	char server_host[64];
 	uint16_t server_port;
 	uint16_t interval_sec;
+	char proc_prefixes[TF_MAX_COMM_PREFIX][TF_COMM_PREFIX_LEN];
+	size_t proc_prefix_count;
 };
 
 struct cpu_payload
@@ -186,9 +191,16 @@ struct tf_collector
 /* cpu.c */
 unsigned long long cpu_total_diff(void);
 
-/* proc.c */
-void proc_add_comm_prefix(const char * prefix);
-void proc_clear_comm_prefixes(void);
+/* config helper: add a proc prefix to agent_config */
+static inline void config_add_proc_prefix(struct agent_config * cfg, const char * prefix)
+{
+	if (cfg->proc_prefix_count >= TF_MAX_COMM_PREFIX) {
+		return;
+	}
+	strncpy(cfg->proc_prefixes[cfg->proc_prefix_count], prefix, TF_COMM_PREFIX_LEN - 1);
+	cfg->proc_prefixes[cfg->proc_prefix_count][TF_COMM_PREFIX_LEN - 1] = '\0';
+	cfg->proc_prefix_count++;
+}
 
 /* tlv.c */
 int tlv_init(struct tlv_writer * writer, uint8_t * buf, size_t cap, uint32_t timestamp, uint32_t seq);
