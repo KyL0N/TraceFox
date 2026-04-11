@@ -171,6 +171,11 @@ struct tlv_writer
 	size_t cap;
 };
 
+struct sample_context
+{
+	unsigned long long cpu_total_diff;
+};
+
 
 struct tf_collector
 {
@@ -182,14 +187,11 @@ struct tf_collector
 	void (*destroy)(struct tf_collector * col);
 
 	/* 对外统一执行采集并写入，内部再解耦为 collect 和 push */
-	int (*collect_and_push)(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg);
+	int (*collect_and_push)(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx);
 
 	/* 打印调试信息，传入 FILE * 便于重定向 */
 	void (*print)(struct tf_collector * col, FILE * out);
 };
-
-/* cpu.c */
-unsigned long long cpu_total_diff(void);
 
 /* config helper: add a proc prefix to agent_config */
 static inline void config_add_proc_prefix(struct agent_config * cfg, const char * prefix)

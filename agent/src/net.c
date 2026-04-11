@@ -117,8 +117,9 @@ static int net_push(struct net_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_NET, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int net_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg)
+static int net_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
 {
+	(void)sctx;
 	struct net_ctx * ctx = (struct net_ctx *)col->ctx;
 	if (!ctx) return -1;
 

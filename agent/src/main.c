@@ -315,11 +315,12 @@ int main(int argc, char ** argv)
 		}
 
 		unsigned long push_errors = 0;
+		struct sample_context sctx = { .cpu_total_diff = 1 };
 
 		for (int i = 0; g_collectors[i] != NULL; i++) {
 			struct tf_collector * col = g_collectors[i];
 			if (col->collect_and_push) {
-				int err = col->collect_and_push(col, &writer, &cfg);
+				int err = col->collect_and_push(col, &writer, &cfg, &sctx);
 				if (err != 0) {
 					(void)fprintf(stderr, "[%s] collect_and_push failed with err: %d\n", col->name, err);
 					push_errors++;
