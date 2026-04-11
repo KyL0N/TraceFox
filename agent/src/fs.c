@@ -8,6 +8,7 @@ struct fs_ctx
 {
 	struct fs_entry entries[TF_MAX_FS];
 	size_t count;
+	int truncated;
 };
 
 static const char * const fs_whitelist[] = { "ext4", "ext3", "ext2", "f2fs", "btrfs", "xfs", "vfat", "ntfs", "exfat", NULL };
@@ -89,6 +90,15 @@ static int fs_collect(struct fs_ctx * ctx, const struct agent_config * cfg)
 				pct10 = (uint64_t)TF_PCT10_MAX;
 			}
 			entry->used_pct_x10 = (uint16_t)pct10;
+		}
+	}
+
+	if (idx >= TF_MAX_FS && !ctx->truncated) {
+		if (fscanf(mounts_fp, TF_FSCANF_MOUNTS_FMT, dev, mount, type, opts, &freq, &passno) == 6) { // NOLINT
+			if (fs_type_allowed(type)) {
+				(void)fprintf(stderr, "[fs] mount limit (%d) reached, some filesystems dropped\n", TF_MAX_FS);
+				ctx->truncated = 1;
+			}
 		}
 	}
 

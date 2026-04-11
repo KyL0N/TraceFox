@@ -22,6 +22,7 @@ struct disk_ctx
 	struct disk_cache cache[TF_MAX_DISKS];
 	struct disk_entry entries[TF_MAX_DISKS];
 	size_t count;
+	int truncated;
 };
 
 static int is_partition_name(const char * name)
@@ -189,6 +190,13 @@ static int disk_collect(struct disk_ctx * ctx, const struct agent_config * cfg)
 		}
 
 		idx++;
+	}
+
+	if (idx >= TF_MAX_DISKS && fgets(line, sizeof(line), disk_fp)) {
+		if (!ctx->truncated) {
+			(void)fprintf(stderr, "[disk] device limit (%d) reached, some devices dropped\n", TF_MAX_DISKS);
+			ctx->truncated = 1;
+		}
 	}
 
 	(void)fclose(disk_fp);
