@@ -127,16 +127,8 @@ static int fs_push(struct fs_ctx *ctx, struct tlv_writer *wrt)
 
 		memcpy(payload_cursor, name, sizeof(name));
 		payload_cursor += sizeof(name);
-		*payload_cursor++ = (uint8_t)((entry->total_kb >> 56) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)((entry->total_kb >> 48) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)((entry->total_kb >> 40) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)((entry->total_kb >> 32) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)((entry->total_kb >> 24) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)((entry->total_kb >> 16) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)((entry->total_kb >> 8) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)(entry->total_kb & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)(entry->used_pct_x10 >> 8);
-		*payload_cursor++ = (uint8_t)(entry->used_pct_x10 & TF_BYTE_MASK);
+		buf_put_be_u64(&payload_cursor, entry->total_kb);
+		buf_put_be_u16(&payload_cursor, entry->used_pct_x10);
 	}
 
 	return tlv_put(wrt, TF_TYPE_FS, payload, (uint8_t)(payload_cursor - payload));

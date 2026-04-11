@@ -225,30 +225,15 @@ static int disk_push(struct disk_ctx *ctx, struct tlv_writer *wrt)
 		memcpy(payload_cursor, name, sizeof(name));
 		payload_cursor += sizeof(name);
 
-		uint64_t cum64[6] = {
-			entry->reads_completed, entry->writes_completed, entry->sectors_read, entry->sectors_written, entry->read_ms, entry->write_ms,
-		};
-		for (size_t ci = 0; ci < 6; ++ci) {
-			*payload_cursor++ = (uint8_t)((cum64[ci] >> 56) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((cum64[ci] >> 48) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((cum64[ci] >> 40) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((cum64[ci] >> 32) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((cum64[ci] >> 24) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((cum64[ci] >> 16) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((cum64[ci] >> 8) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)(cum64[ci] & TF_BYTE_MASK);
-		}
-
-		uint32_t delta32[2] = { entry->read_iops_delta, entry->write_iops_delta };
-		for (size_t di = 0; di < 2; ++di) {
-			*payload_cursor++ = (uint8_t)((delta32[di] >> 24) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((delta32[di] >> 16) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((delta32[di] >> 8) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)(delta32[di] & TF_BYTE_MASK);
-		}
-
-		*payload_cursor++ = (uint8_t)((entry->io_util_pct_x10 >> 8) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)(entry->io_util_pct_x10 & TF_BYTE_MASK);
+		buf_put_be_u64(&payload_cursor, entry->reads_completed);
+		buf_put_be_u64(&payload_cursor, entry->writes_completed);
+		buf_put_be_u64(&payload_cursor, entry->sectors_read);
+		buf_put_be_u64(&payload_cursor, entry->sectors_written);
+		buf_put_be_u64(&payload_cursor, entry->read_ms);
+		buf_put_be_u64(&payload_cursor, entry->write_ms);
+		buf_put_be_u32(&payload_cursor, entry->read_iops_delta);
+		buf_put_be_u32(&payload_cursor, entry->write_iops_delta);
+		buf_put_be_u16(&payload_cursor, entry->io_util_pct_x10);
 	}
 
 	return tlv_put(wrt, TF_TYPE_DISK, payload, (uint8_t)(payload_cursor - payload));
