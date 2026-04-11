@@ -25,7 +25,7 @@ struct disk_ctx
 	int truncated;
 };
 
-static int is_partition_name(const char * name)
+static int is_partition_name(const char *name)
 {
 	if (!name) {
 		return 0;
@@ -51,7 +51,7 @@ static int is_partition_name(const char * name)
 	return isdigit((unsigned char)name[len - 1]);
 }
 
-static struct disk_cache * disk_cache_slot(struct disk_ctx * ctx, const char * name)
+static struct disk_cache *disk_cache_slot(struct disk_ctx *ctx, const char *name)
 {
 	if (!name) {
 		return NULL;
@@ -73,10 +73,10 @@ static struct disk_cache * disk_cache_slot(struct disk_ctx * ctx, const char * n
 	return NULL;
 }
 
-static int disk_init(struct tf_collector * col, const struct agent_config * cfg)
+static int disk_init(struct tf_collector *col, const struct agent_config *cfg)
 {
 	(void)cfg;
-	struct disk_ctx * ctx = calloc(1, sizeof(*ctx));
+	struct disk_ctx *ctx = calloc(1, sizeof(*ctx));
 	if (!ctx) {
 		return -1;
 	}
@@ -84,7 +84,7 @@ static int disk_init(struct tf_collector * col, const struct agent_config * cfg)
 	return 0;
 }
 
-static void disk_destroy(struct tf_collector * col)
+static void disk_destroy(struct tf_collector *col)
 {
 	if (col && col->ctx) {
 		free(col->ctx);
@@ -92,14 +92,14 @@ static void disk_destroy(struct tf_collector * col)
 	}
 }
 
-static int disk_collect(struct disk_ctx * ctx, const struct agent_config * cfg)
+static int disk_collect(struct disk_ctx *ctx, const struct agent_config *cfg)
 {
 	uint16_t interval_sec = cfg->interval_sec;
 	if (interval_sec == 0) {
 		interval_sec = 1;
 	}
 
-	FILE * disk_fp = fopen("/proc/diskstats", "r");
+	FILE *disk_fp = fopen("/proc/diskstats", "r");
 	if (!disk_fp) {
 		ctx->count = 0;
 		return -1;
@@ -136,12 +136,12 @@ static int disk_collect(struct disk_ctx * ctx, const struct agent_config * cfg)
 			continue;
 		}
 
-		struct disk_cache * slot = disk_cache_slot(ctx, name);
+		struct disk_cache *slot = disk_cache_slot(ctx, name);
 		if (!slot) {
 			continue;
 		}
 
-		struct disk_entry * entry = &ctx->entries[idx];
+		struct disk_entry *entry = &ctx->entries[idx];
 		memset(entry, 0, sizeof(*entry));
 		strncpy(entry->name, name, sizeof(entry->name) - 1);
 
@@ -203,16 +203,16 @@ static int disk_collect(struct disk_ctx * ctx, const struct agent_config * cfg)
 	return 0;
 }
 
-static int disk_push(struct disk_ctx * ctx, struct tlv_writer * wrt)
+static int disk_push(struct disk_ctx *ctx, struct tlv_writer *wrt)
 {
 	if (ctx->count == 0) {
 		return 0;
 	}
 
 	uint8_t payload[1 + TF_MAX_DISKS * TF_DISK_ENTRY_PAYLOAD_LEN] = { 0 };
-	uint8_t * payload_cursor                                      = payload;
+	uint8_t *payload_cursor                                       = payload;
 	size_t idx                                                    = 0;
-	struct disk_entry * entry                                     = NULL;
+	struct disk_entry *entry                                      = NULL;
 	char name[TF_DISK_NAME_SIZE]                                  = { 0 };
 
 	*payload_cursor++ = (uint8_t)ctx->count;
@@ -226,9 +226,7 @@ static int disk_push(struct disk_ctx * ctx, struct tlv_writer * wrt)
 		payload_cursor += sizeof(name);
 
 		uint64_t cum64[6] = {
-			entry->reads_completed, entry->writes_completed,
-			entry->sectors_read,    entry->sectors_written,
-			entry->read_ms,         entry->write_ms,
+			entry->reads_completed, entry->writes_completed, entry->sectors_read, entry->sectors_written, entry->read_ms, entry->write_ms,
 		};
 		for (size_t ci = 0; ci < 6; ++ci) {
 			*payload_cursor++ = (uint8_t)((cum64[ci] >> 56) & TF_BYTE_MASK);
@@ -256,10 +254,10 @@ static int disk_push(struct disk_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_DISK, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int disk_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
+static int disk_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	(void)sctx;
-	struct disk_ctx * ctx = (struct disk_ctx *)col->ctx;
+	struct disk_ctx *ctx = (struct disk_ctx *)col->ctx;
 	if (!ctx) return -1;
 
 	if (disk_collect(ctx, cfg) != 0) {
@@ -269,27 +267,19 @@ static int disk_collect_and_push(struct tf_collector * col, struct tlv_writer * 
 	return disk_push(ctx, wrt);
 }
 
-static void disk_print(struct tf_collector * col, FILE * out)
+static void disk_print(struct tf_collector *col, FILE *out)
 {
-	struct disk_ctx * ctx = (struct disk_ctx *)col->ctx;
+	struct disk_ctx *ctx = (struct disk_ctx *)col->ctx;
 	if (!ctx) return;
 
 	(void)fprintf(out, "DISK: count=%zu\n", ctx->count);
 	for (size_t i = 0; i < ctx->count; i++) {
 		(void)fprintf(out,
-		              "  - %s: cum(r=%llu,w=%llu,sr=%llu,sw=%llu,rm=%llu,wm=%llu) "
+		              "  - %s: cum(r=%lu,w=%lu,sr=%lu,sw=%lu,rm=%lu,wm=%lu) "
 		              "delta(iops_r=%u,iops_w=%u) util=%u.%1u%%%%\n",
-		              ctx->entries[i].name,
-		              (unsigned long long)ctx->entries[i].reads_completed,
-		              (unsigned long long)ctx->entries[i].writes_completed,
-		              (unsigned long long)ctx->entries[i].sectors_read,
-		              (unsigned long long)ctx->entries[i].sectors_written,
-		              (unsigned long long)ctx->entries[i].read_ms,
-		              (unsigned long long)ctx->entries[i].write_ms,
-		              ctx->entries[i].read_iops_delta,
-		              ctx->entries[i].write_iops_delta,
-		              ctx->entries[i].io_util_pct_x10 / TF_PERCENT_DIV,
-		              ctx->entries[i].io_util_pct_x10 % TF_PERCENT_DIV);
+		              ctx->entries[i].name, ctx->entries[i].reads_completed, ctx->entries[i].writes_completed, ctx->entries[i].sectors_read,
+		              ctx->entries[i].sectors_written, ctx->entries[i].read_ms, ctx->entries[i].write_ms, ctx->entries[i].read_iops_delta,
+		              ctx->entries[i].write_iops_delta, ctx->entries[i].io_util_pct_x10 / TF_PERCENT_DIV, ctx->entries[i].io_util_pct_x10 % TF_PERCENT_DIV);
 	}
 }
 

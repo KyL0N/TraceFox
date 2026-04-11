@@ -21,10 +21,10 @@ struct cpu_ctx
 
 static unsigned long long g_last_diff_total = 1;
 
-static int cpu_init(struct tf_collector * col, const struct agent_config * cfg)
+static int cpu_init(struct tf_collector *col, const struct agent_config *cfg)
 {
 	(void)cfg;
-	struct cpu_ctx * ctx = calloc(1, sizeof(*ctx));
+	struct cpu_ctx *ctx = calloc(1, sizeof(*ctx));
 	if (!ctx) {
 		return -1;
 	}
@@ -32,7 +32,7 @@ static int cpu_init(struct tf_collector * col, const struct agent_config * cfg)
 	return 0;
 }
 
-static void cpu_destroy(struct tf_collector * col)
+static void cpu_destroy(struct tf_collector *col)
 {
 	if (col && col->ctx) {
 		free(col->ctx);
@@ -40,10 +40,10 @@ static void cpu_destroy(struct tf_collector * col)
 	}
 }
 
-static int cpu_collect(struct cpu_ctx * ctx, const struct agent_config * cfg)
+static int cpu_collect(struct cpu_ctx *ctx, const struct agent_config *cfg)
 {
 	(void)cfg;
-	FILE * stat_fp = fopen("/proc/stat", "r");
+	FILE *stat_fp = fopen("/proc/stat", "r");
 	if (!stat_fp) {
 		memset(&ctx->last_payload, 0, sizeof(ctx->last_payload));
 		return -1;
@@ -117,10 +117,10 @@ static int cpu_collect(struct cpu_ctx * ctx, const struct agent_config * cfg)
 	return 0;
 }
 
-static int cpu_push(struct cpu_ctx * ctx, struct tlv_writer * wrt)
+static int cpu_push(struct cpu_ctx *ctx, struct tlv_writer *wrt)
 {
 	uint8_t payload[TF_CPU_PAYLOAD_LEN] = { 0 };
-	uint8_t * payload_cursor            = payload;
+	uint8_t *payload_cursor             = payload;
 
 	*payload_cursor++ = (uint8_t)(ctx->last_payload.user >> 8);
 	*payload_cursor++ = (uint8_t)(ctx->last_payload.user & TF_BYTE_MASK);
@@ -136,9 +136,9 @@ static int cpu_push(struct cpu_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_CPU, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int cpu_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
+static int cpu_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
 {
-	struct cpu_ctx * ctx = (struct cpu_ctx *)col->ctx;
+	struct cpu_ctx *ctx = (struct cpu_ctx *)col->ctx;
 	if (!ctx) return -1;
 
 	if (cpu_collect(ctx, cfg) != 0) {
@@ -152,9 +152,9 @@ static int cpu_collect_and_push(struct tf_collector * col, struct tlv_writer * w
 	return cpu_push(ctx, wrt);
 }
 
-static void cpu_print(struct tf_collector * col, FILE * out)
+static void cpu_print(struct tf_collector *col, FILE *out)
 {
-	struct cpu_ctx * ctx = (struct cpu_ctx *)col->ctx;
+	struct cpu_ctx *ctx = (struct cpu_ctx *)col->ctx;
 	if (!ctx) return;
 
 	(void)fprintf(out, "CPU : user=%3u.%1u%% sys=%3u.%1u%% idle=%3u.%1u%% iowait=%3u.%1u%% irq=%3u.%1u%%\n",

@@ -20,15 +20,15 @@ COLLECTOR_LIST
 /* Generate pointer array */
 static struct tf_collector *g_collectors[] = {
 #define COLLECTOR(name) &name##_collector,
-COLLECTOR_LIST
+	COLLECTOR_LIST
 #undef COLLECTOR
-	NULL /* End of collectors */
+	    NULL /* End of collectors */
 };
 
 static volatile sig_atomic_t keep_running = 1;
 static bool verbose                       = false;
 
-static const char * const config_search_paths[] = {
+static const char *const config_search_paths[] = {
 	"config/agent.conf",
 	"agent/config/agent.conf",
 	"/etc/tracefox/agent.conf",
@@ -41,7 +41,7 @@ static void handle_signal(int sig)
 	keep_running = 0;
 }
 
-static void config_defaults(struct agent_config * cfg)
+static void config_defaults(struct agent_config *cfg)
 {
 	memset(cfg, 0, sizeof(*cfg));
 	strncpy(cfg->server_host, TF_DEFAULT_SERVER_HOST, sizeof(cfg->server_host) - 1);
@@ -49,7 +49,7 @@ static void config_defaults(struct agent_config * cfg)
 	cfg->interval_sec = TF_DEFAULT_INTERVAL_SEC;
 }
 
-static int resolve_addr(const char * host, uint16_t port, struct sockaddr_in * addr)
+static int resolve_addr(const char *host, uint16_t port, struct sockaddr_in *addr)
 {
 	memset(addr, 0, sizeof(*addr));
 	addr->sin_family = AF_INET;
@@ -62,9 +62,9 @@ static int resolve_addr(const char * host, uint16_t port, struct sockaddr_in * a
 	return 0;
 }
 
-static char * trim_inplace(char * string)
+static char *trim_inplace(char *string)
 {
-	char * end = NULL;
+	char *end = NULL;
 
 	while (*string && isspace((unsigned char)*string)) {
 		++string;
@@ -82,7 +82,7 @@ static char * trim_inplace(char * string)
 	return string;
 }
 
-static const char * find_config_file(void)
+static const char *find_config_file(void)
 {
 	for (int i = 0; config_search_paths[i] != NULL; ++i) {
 		if (access(config_search_paths[i], R_OK) == 0) {
@@ -93,10 +93,10 @@ static const char * find_config_file(void)
 }
 
 /* Returns 0 on success, -1 if file cannot be opened. */
-static int load_config_file(const char * path, struct agent_config * cfg)
+static int load_config_file(const char *path, struct agent_config *cfg)
 {
-	FILE * config_fp             = NULL;
-	char line[TF_LINE_BUF_SMALL] = {0};
+	FILE *config_fp              = NULL;
+	char line[TF_LINE_BUF_SMALL] = { 0 };
 	unsigned int line_no         = 0;
 
 	config_fp = fopen(path, "r");
@@ -105,9 +105,9 @@ static int load_config_file(const char * path, struct agent_config * cfg)
 	}
 
 	while (fgets(line, sizeof(line), config_fp) != NULL) {
-		char * key  = NULL;
-		char * val  = NULL;
-		char * eqs  = NULL;
+		char *key   = NULL;
+		char *val   = NULL;
+		char *eqs   = NULL;
 		long parsed = 0;
 
 		++line_no;
@@ -155,8 +155,8 @@ static int load_config_file(const char * path, struct agent_config * cfg)
 			}
 		}
 		else if (strcmp(key, "proc_prefix") == 0) {
-			char * saveptr = NULL;
-			char * prefix  = strtok_r(val, ",", &saveptr);
+			char *saveptr = NULL;
+			char *prefix  = strtok_r(val, ",", &saveptr);
 
 			while (prefix) {
 				prefix = trim_inplace(prefix);
@@ -172,15 +172,15 @@ static int load_config_file(const char * path, struct agent_config * cfg)
 	return 0;
 }
 
-static void print_effective_config(const struct agent_config * cfg)
+static void print_effective_config(const struct agent_config *cfg)
 {
-	(void)fprintf(stderr, "[config] effective: server_host=%s server_port=%u interval=%u\n",
-	              cfg->server_host, (unsigned)cfg->server_port, (unsigned)cfg->interval_sec);
+	(void)fprintf(stderr, "[config] effective: server_host=%s server_port=%u interval=%u\n", cfg->server_host, (unsigned)cfg->server_port,
+	              (unsigned)cfg->interval_sec);
 }
 
-static void config_init_from_sources(int argc, char ** argv, struct agent_config * cfg)
+static void config_init_from_sources(int argc, char **argv, struct agent_config *cfg)
 {
-	const char * explicit_path = NULL;
+	const char *explicit_path = NULL;
 
 	config_defaults(cfg);
 
@@ -200,7 +200,7 @@ static void config_init_from_sources(int argc, char ** argv, struct agent_config
 		(void)fprintf(stderr, "[config] loaded: %s\n", explicit_path);
 	}
 	else {
-		const char * found = find_config_file();
+		const char *found = find_config_file();
 		if (found) {
 			(void)load_config_file(found, cfg);
 			(void)fprintf(stderr, "[config] loaded: %s\n", found);
@@ -211,19 +211,19 @@ static void config_init_from_sources(int argc, char ** argv, struct agent_config
 	}
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
-	int opt            = 0;
-	int sock           = -1;
-	int file_mode      = 0;
-	uint32_t seq       = 0;
-	char * output_file = NULL;
-	FILE * log_file    = NULL;
+	int opt           = 0;
+	int sock          = -1;
+	int file_mode     = 0;
+	uint32_t seq      = 0;
+	char *output_file = NULL;
+	FILE *log_file    = NULL;
 
-	uint8_t buffer[TF_FRAME_BUF_SIZE]        = {0};
-	struct sockaddr_in dest                  = {0};
-	struct agent_config cfg                  = {0};
-	struct tlv_writer writer                 = {0};
+	uint8_t buffer[TF_FRAME_BUF_SIZE] = { 0 };
+	struct sockaddr_in dest           = { 0 };
+	struct agent_config cfg           = { 0 };
+	struct tlv_writer writer          = { 0 };
 
 	/*
 	 * Lifecycle: defaults -> proc init (needed by config parser for proc_add_comm_prefix)
@@ -233,8 +233,7 @@ int main(int argc, char ** argv)
 
 	while ((opt = getopt(argc, argv, "c:h:p:i:f:P:v")) != -1) {
 		switch (opt) {
-		case 'c':
-			break;
+		case 'c': break;
 		case 'h': (void)strncpy(cfg.server_host, optarg, sizeof(cfg.server_host) - 1); break;
 		case 'p': cfg.server_port = (uint16_t)strtol(optarg, NULL, 10); break;
 		case 'i':
@@ -248,8 +247,8 @@ int main(int argc, char ** argv)
 			output_file = optarg;
 			break;
 		case 'P': {
-			char * saveptr = NULL;
-			char * prefix  = strtok_r(optarg, ",", &saveptr);
+			char *saveptr = NULL;
+			char *prefix  = strtok_r(optarg, ",", &saveptr);
 			while (prefix) {
 				prefix = trim_inplace(prefix);
 				if (*prefix != '\0') {
@@ -289,7 +288,7 @@ int main(int argc, char ** argv)
 		}
 		(void)fseek(log_file, 0, SEEK_END);
 		if (ftell(log_file) == 0) {
-			char header[TF_HEADER_LEN] = {'T', 'F', 'O', 'X', TF_HEADER_VER, 0x00, 0x00, 0x00};
+			char header[TF_HEADER_LEN] = { 'T', 'F', 'O', 'X', TF_HEADER_VER, 0x00, 0x00, 0x00 };
 			(void)fwrite(header, 1, TF_HEADER_LEN, log_file);
 		}
 	}
@@ -314,11 +313,11 @@ int main(int argc, char ** argv)
 			break;
 		}
 
-		unsigned long push_errors = 0;
+		unsigned long push_errors  = 0;
 		struct sample_context sctx = { .cpu_total_diff = 1 };
 
 		for (int i = 0; g_collectors[i] != NULL; i++) {
-			struct tf_collector * col = g_collectors[i];
+			struct tf_collector *col = g_collectors[i];
 			if (col->collect_and_push) {
 				int err = col->collect_and_push(col, &writer, &cfg, &sctx);
 				if (err != 0) {
@@ -331,7 +330,7 @@ int main(int argc, char ** argv)
 		if (verbose) {
 			printf("==== tracefox-agent sample @ %u (tlv_errors=%lu) ====\n", timestamp, push_errors);
 			for (int i = 0; g_collectors[i] != NULL; i++) {
-				struct tf_collector * col = g_collectors[i];
+				struct tf_collector *col = g_collectors[i];
 				if (col->print) {
 					col->print(col, stdout);
 				}

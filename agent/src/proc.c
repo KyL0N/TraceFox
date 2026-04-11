@@ -43,7 +43,7 @@ struct proc_ctx
 	struct proc_payload last_payload;
 };
 
-static void apply_config_prefixes(struct proc_ctx * ctx, const struct agent_config * cfg)
+static void apply_config_prefixes(struct proc_ctx *ctx, const struct agent_config *cfg)
 {
 	for (size_t i = 0; i < cfg->proc_prefix_count && i < MAX_COMM_PREFIX; ++i) {
 		strncpy(ctx->comm_prefix_list[i], cfg->proc_prefixes[i], COMM_PREFIX_LEN - 1);
@@ -57,13 +57,13 @@ static void apply_config_prefixes(struct proc_ctx * ctx, const struct agent_conf
 	ctx->watch_group_count = cfg->proc_prefix_count;
 }
 
-static int comm_prefix_match(struct proc_ctx * ctx, const char * comm)
+static int comm_prefix_match(struct proc_ctx *ctx, const char *comm)
 {
 	if (ctx->comm_prefix_count == 0) {
 		return 1; // 没设置前缀 → 全部监控
 	}
 	for (size_t i = 0; i < ctx->comm_prefix_count; i++) {
-		const char * prefix = ctx->comm_prefix_list[i];
+		const char *prefix = ctx->comm_prefix_list[i];
 		if (strncmp(comm, prefix, strlen(prefix)) == 0) {
 			return 1;
 		}
@@ -71,7 +71,7 @@ static int comm_prefix_match(struct proc_ctx * ctx, const char * comm)
 	return 0;
 }
 
-static struct proc_prev * find_slot(struct proc_ctx * ctx, long pid)
+static struct proc_prev *find_slot(struct proc_ctx *ctx, long pid)
 {
 	size_t idx = PID_HASH(pid);
 
@@ -102,7 +102,7 @@ static struct proc_prev * find_slot(struct proc_ctx * ctx, long pid)
 	return &ctx->history[idx];
 }
 
-static size_t get_cpu_count(struct proc_ctx * ctx)
+static size_t get_cpu_count(struct proc_ctx *ctx)
 {
 	if (ctx->cpu_count <= 0) {
 		ctx->cpu_count = (size_t)sysconf(_SC_NPROCESSORS_ONLN);
@@ -114,9 +114,9 @@ static size_t get_cpu_count(struct proc_ctx * ctx)
 	return ctx->cpu_count;
 }
 
-static unsigned long long parse_stat(const char * path, int * pid_out, char * comm_out)
+static unsigned long long parse_stat(const char *path, int *pid_out, char *comm_out)
 {
-	FILE * stat_fp = fopen(path, "r");
+	FILE *stat_fp = fopen(path, "r");
 	if (!stat_fp) {
 		return 0;
 	}
@@ -134,8 +134,8 @@ static unsigned long long parse_stat(const char * path, int * pid_out, char * co
 	}
 	*pid_out = pid;
 
-	char * left  = strchr(buf, '(');
-	char * right = strrchr(buf, ')');
+	char *left  = strchr(buf, '(');
+	char *right = strrchr(buf, ')');
 	if (!left || !right || right <= left) {
 		return 0;
 	}
@@ -150,7 +150,7 @@ static unsigned long long parse_stat(const char * path, int * pid_out, char * co
 
 	unsigned long long utime = 0ULL;
 	unsigned long long stime = 0ULL;
-	char * link              = right + 1;
+	char *link               = right + 1;
 
 	if (sscanf(link, " %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu", &utime, &stime) != 2) { // NOLINT
 		return 0;
@@ -162,7 +162,7 @@ static unsigned long long parse_stat(const char * path, int * pid_out, char * co
 static uint32_t parse_rss_kb(long pid)
 {
 	char path[TF_PATH_BUF];
-	FILE * status_fp = NULL;
+	FILE *status_fp = NULL;
 
 	(void)snprintf(path, sizeof(path), "/proc/%ld/status", pid);
 	status_fp = fopen(path, "r");
@@ -210,7 +210,7 @@ static uint32_t parse_rss_kb(long pid)
 	return (uint32_t)(rss_pages * (unsigned long)page_kb);
 }
 
-static void history_gc(struct proc_ctx * ctx)
+static void history_gc(struct proc_ctx *ctx)
 {
 	for (size_t i = 0; i < TF_PROC_TRACK; ++i) {
 		if (ctx->history[i].pid == 0) {
@@ -232,25 +232,24 @@ static void history_gc(struct proc_ctx * ctx)
 	}
 }
 
-static void tracker_reset_lists(struct proc_ctx * ctx)
+static void tracker_reset_lists(struct proc_ctx *ctx)
 {
 	for (size_t i = 0; i < ctx->watch_group_count; ++i) {
 		ctx->watch_groups[i].list.count = 0;
 	}
 }
 
-static void tracker_add_pid(struct proc_ctx * ctx, const char * comm, long pid)
+static void tracker_add_pid(struct proc_ctx *ctx, const char *comm, long pid)
 {
 	for (size_t i = 0; i < ctx->watch_group_count; ++i) {
 		size_t prefix_len = strlen(ctx->watch_groups[i].name);
 		if (strncmp(comm, ctx->watch_groups[i].name, prefix_len) == 0) {
-			struct pid_list * lst = &ctx->watch_groups[i].list;
+			struct pid_list *lst = &ctx->watch_groups[i].list;
 			if (lst->count < TF_PROC_TRACK) {
 				lst->pids[lst->count++] = pid;
 			}
 			else {
-				(void)fprintf(stderr, "[proc] PID limit (%d) for group \"%s\", dropping pid %ld\n",
-				              TF_PROC_TRACK, ctx->watch_groups[i].name, pid);
+				(void)fprintf(stderr, "[proc] PID limit (%d) for group \"%s\", dropping pid %ld\n", TF_PROC_TRACK, ctx->watch_groups[i].name, pid);
 			}
 			return;
 		}
@@ -271,16 +270,16 @@ static void tracker_add_pid(struct proc_ctx * ctx, const char * comm, long pid)
 	}
 }
 
-static void tracker_scan_proc(struct proc_ctx * ctx)
+static void tracker_scan_proc(struct proc_ctx *ctx)
 {
-	DIR * dir = opendir("/proc");
+	DIR *dir = opendir("/proc");
 	if (!dir) {
 		return;
 	}
 
 	tracker_reset_lists(ctx);
 
-	struct dirent * entry = NULL;
+	struct dirent *entry = NULL;
 	while ((entry = readdir(dir))) {
 		if (!isdigit((unsigned char)entry->d_name[0])) {
 			continue;
@@ -294,7 +293,7 @@ static void tracker_scan_proc(struct proc_ctx * ctx)
 		char comm_path[TF_PATH_BUF] = { 0 };
 		(void)snprintf(comm_path, sizeof(comm_path), "/proc/%ld/comm", pid);
 
-		FILE * comm_fp = fopen(comm_path, "r");
+		FILE *comm_fp = fopen(comm_path, "r");
 		if (!comm_fp) {
 			continue;
 		}
@@ -323,9 +322,9 @@ static void tracker_scan_proc(struct proc_ctx * ctx)
 	ctx->last_scan_time = time(NULL);
 }
 
-static int proc_init(struct tf_collector * col, const struct agent_config * cfg)
+static int proc_init(struct tf_collector *col, const struct agent_config *cfg)
 {
-	struct proc_ctx * ctx = calloc(1, sizeof(*ctx));
+	struct proc_ctx *ctx = calloc(1, sizeof(*ctx));
 	if (!ctx) {
 		return -1;
 	}
@@ -336,7 +335,7 @@ static int proc_init(struct tf_collector * col, const struct agent_config * cfg)
 	return 0;
 }
 
-static void proc_destroy(struct tf_collector * col)
+static void proc_destroy(struct tf_collector *col)
 {
 	if (col && col->ctx) {
 		free(col->ctx);
@@ -344,7 +343,7 @@ static void proc_destroy(struct tf_collector * col)
 	}
 }
 
-static int proc_collect(struct proc_ctx * ctx, const struct agent_config * cfg)
+static int proc_collect(struct proc_ctx *ctx, const struct agent_config *cfg)
 {
 	(void)cfg;
 
@@ -363,7 +362,7 @@ static int proc_collect(struct proc_ctx * ctx, const struct agent_config * cfg)
 	uint64_t rss_sum_kb[MAX_COMM_PREFIX]  = { 0 };
 
 	for (size_t group_idx = 0; group_idx < ctx->watch_group_count; ++group_idx) {
-		const struct watch_group * grp = &ctx->watch_groups[group_idx];
+		const struct watch_group *grp = &ctx->watch_groups[group_idx];
 		for (size_t i = 0; i < grp->list.count; ++i) {
 			long pid = grp->list.pids[i];
 
@@ -377,7 +376,7 @@ static int proc_collect(struct proc_ctx * ctx, const struct agent_config * cfg)
 				continue;
 			}
 
-			struct proc_prev * slot       = find_slot(ctx, pid);
+			struct proc_prev *slot        = find_slot(ctx, pid);
 			unsigned long long prev_ticks = slot->ticks;
 			slot->ticks                   = ticks;
 
@@ -405,7 +404,7 @@ static int proc_collect(struct proc_ctx * ctx, const struct agent_config * cfg)
 			continue;
 		}
 
-		struct proc_group_entry * dst = &ctx->last_payload.groups[out_groups];
+		struct proc_group_entry *dst = &ctx->last_payload.groups[out_groups];
 
 		strncpy(dst->name, ctx->watch_groups[index].name, sizeof(dst->name) - 1);
 		dst->name[sizeof(dst->name) - 1] = '\0';
@@ -438,15 +437,15 @@ static int proc_collect(struct proc_ctx * ctx, const struct agent_config * cfg)
 	return 0;
 }
 
-static int proc_push(struct proc_ctx * ctx, struct tlv_writer * wrt)
+static int proc_push(struct proc_ctx *ctx, struct tlv_writer *wrt)
 {
 	uint8_t payload[1 + TF_MAX_PROC_GROUPS * TF_PROC_GROUP_PAYLOAD_LEN] = { 0 };
-	uint8_t * payload_cursor                                            = payload;
+	uint8_t *payload_cursor                                             = payload;
 
 	*payload_cursor++ = ctx->last_payload.group_count;
 
 	for (uint8_t i = 0; i < ctx->last_payload.group_count && i < TF_MAX_PROC_GROUPS; ++i) {
-		const struct proc_group_entry * group = &ctx->last_payload.groups[i];
+		const struct proc_group_entry *group = &ctx->last_payload.groups[i];
 
 		memcpy(payload_cursor, group->name, sizeof(group->name));
 		payload_cursor += sizeof(group->name);
@@ -466,9 +465,9 @@ static int proc_push(struct proc_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_PROC, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int proc_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
+static int proc_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
 {
-	struct proc_ctx * ctx = (struct proc_ctx *)col->ctx;
+	struct proc_ctx *ctx = (struct proc_ctx *)col->ctx;
 	if (!ctx) return -1;
 
 	ctx->cpu_total_diff = sctx ? sctx->cpu_total_diff : 1;
@@ -480,14 +479,14 @@ static int proc_collect_and_push(struct tf_collector * col, struct tlv_writer * 
 	return proc_push(ctx, wrt);
 }
 
-static void proc_print(struct tf_collector * col, FILE * out)
+static void proc_print(struct tf_collector *col, FILE *out)
 {
-	struct proc_ctx * ctx = (struct proc_ctx *)col->ctx;
+	struct proc_ctx *ctx = (struct proc_ctx *)col->ctx;
 	if (!ctx) return;
 
 	(void)fprintf(out, "PROC: groups=%u\n", ctx->last_payload.group_count);
 	for (uint8_t i = 0; i < ctx->last_payload.group_count && i < TF_MAX_PROC_GROUPS; ++i) {
-		const struct proc_group_entry * group = &ctx->last_payload.groups[i];
+		const struct proc_group_entry *group = &ctx->last_payload.groups[i];
 		(void)fprintf(out, "  - %s: inst=%u cpu=%u.%1u%%%% rss_sum=%u kB\n", group->name, (unsigned)group->inst_count,
 		              (unsigned)(group->cpu_pct_x10 / TF_PERCENT_DIV), (unsigned)(group->cpu_pct_x10 % TF_PERCENT_DIV), (unsigned)group->rss_kb_sum);
 	}

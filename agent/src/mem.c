@@ -9,10 +9,10 @@ struct mem_ctx
 	struct load_payload last_load;
 };
 
-static int mem_init(struct tf_collector * col, const struct agent_config * cfg)
+static int mem_init(struct tf_collector *col, const struct agent_config *cfg)
 {
 	(void)cfg;
-	struct mem_ctx * ctx = calloc(1, sizeof(*ctx));
+	struct mem_ctx *ctx = calloc(1, sizeof(*ctx));
 	if (!ctx) {
 		return -1;
 	}
@@ -20,7 +20,7 @@ static int mem_init(struct tf_collector * col, const struct agent_config * cfg)
 	return 0;
 }
 
-static void mem_destroy(struct tf_collector * col)
+static void mem_destroy(struct tf_collector *col)
 {
 	if (col && col->ctx) {
 		free(col->ctx);
@@ -28,11 +28,11 @@ static void mem_destroy(struct tf_collector * col)
 	}
 }
 
-static int mem_collect(struct mem_ctx * ctx, const struct agent_config * cfg)
+static int mem_collect(struct mem_ctx *ctx, const struct agent_config *cfg)
 {
 	(void)cfg;
 
-	FILE * meminfo_fp = fopen("/proc/meminfo", "r");
+	FILE *meminfo_fp = fopen("/proc/meminfo", "r");
 	if (!meminfo_fp) {
 		memset(&ctx->last_mem, 0, sizeof(ctx->last_mem));
 		return -1;
@@ -71,7 +71,7 @@ static int mem_collect(struct mem_ctx * ctx, const struct agent_config * cfg)
 	ctx->last_mem.mem_free_kb      = (uint32_t)freev;
 	ctx->last_mem.mem_available_kb = (uint32_t)avail;
 
-	FILE * lfp = fopen("/proc/loadavg", "r");
+	FILE *lfp = fopen("/proc/loadavg", "r");
 	if (!lfp) {
 		memset(&ctx->last_load, 0, sizeof(ctx->last_load));
 		return -1;
@@ -92,10 +92,10 @@ static int mem_collect(struct mem_ctx * ctx, const struct agent_config * cfg)
 	return 0;
 }
 
-static int mem_push(struct mem_ctx * ctx, struct tlv_writer * wrt)
+static int mem_push(struct mem_ctx *ctx, struct tlv_writer *wrt)
 {
 	uint8_t payload[TF_MEM_PAYLOAD_LEN] = { 0 };
-	uint8_t * payload_cursor            = payload;
+	uint8_t *payload_cursor             = payload;
 
 	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_total_kb >> 24);
 	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_total_kb >> 16);
@@ -124,10 +124,10 @@ static int mem_push(struct mem_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_MEM, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int mem_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
+static int mem_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	(void)sctx;
-	struct mem_ctx * ctx = (struct mem_ctx *)col->ctx;
+	struct mem_ctx *ctx = (struct mem_ctx *)col->ctx;
 	if (!ctx) return -1;
 
 	if (mem_collect(ctx, cfg) != 0) {
@@ -137,9 +137,9 @@ static int mem_collect_and_push(struct tf_collector * col, struct tlv_writer * w
 	return mem_push(ctx, wrt);
 }
 
-static void mem_print(struct tf_collector * col, FILE * out)
+static void mem_print(struct tf_collector *col, FILE *out)
 {
-	struct mem_ctx * ctx = (struct mem_ctx *)col->ctx;
+	struct mem_ctx *ctx = (struct mem_ctx *)col->ctx;
 	if (!ctx) return;
 
 	uint32_t mem_used = ctx->last_mem.mem_total_kb > ctx->last_mem.mem_available_kb ? (ctx->last_mem.mem_total_kb - ctx->last_mem.mem_available_kb) : 0;
