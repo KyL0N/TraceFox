@@ -24,8 +24,9 @@ static struct tf_collector *g_collectors[] = {
 	    NULL /* End of collectors */
 };
 
-static volatile sig_atomic_t keep_running = 1;
-enum tf_log_level g_tf_log_level          = TF_LOG_LVL_INFO;
+static volatile sig_atomic_t keep_running       = 1;
+static volatile sig_atomic_t reload_config_flag = 0;
+enum tf_log_level g_tf_log_level                = TF_LOG_LVL_INFO;
 
 static const char *const config_search_paths[] = {
 	"config/agent.conf",
@@ -36,8 +37,12 @@ static const char *const config_search_paths[] = {
 
 static void handle_signal(int sig)
 {
-	(void)sig;
-	keep_running = 0;
+	if (sig == SIGHUP) {
+		reload_config_flag = 1;
+	}
+	else {
+		keep_running = 0;
+	}
 }
 
 static void config_defaults(struct agent_config *cfg)
@@ -208,36 +213,26 @@ static void config_init_from_sources(int argc, char **argv, struct agent_config 
 	}
 }
 
-int main(int argc, char **argv)
+static int sock          = -1;
+static int file_mode     = 0;
+static char *output_file = NULL;
+static FILE *log_file    = NULL;
+static struct sockaddr_in dest;
+
+static int init_agent_state(int argc, char **argv, struct agent_config *cfg)
 {
-	int opt           = 0;
-	int sock          = -1;
-	int file_mode     = 0;
-	uint32_t seq      = 0;
-	char *output_file = NULL;
-	FILE *log_file    = NULL;
-
-	uint8_t buffer[TF_FRAME_BUF_SIZE] = { 0 };
-	struct sockaddr_in dest           = { 0 };
-	struct agent_config cfg           = { 0 };
-	struct tlv_writer writer          = { 0 };
-
-	/*
-	 * Lifecycle: defaults -> proc init (needed by config parser for proc_add_comm_prefix)
-	 * -> config file + CLI -> remaining collector inits (with full config)
-	 */
-	config_init_from_sources(argc, argv, &cfg);
+	int opt = 0;
+	optind = 1;
+	config_init_from_sources(argc, argv, cfg);
 
 	while ((opt = getopt(argc, argv, "c:h:p:i:f:P:v")) != -1) {
 		switch (opt) {
 		case 'c': break;
-		case 'h': (void)strncpy(cfg.server_host, optarg, sizeof(cfg.server_host) - 1); break;
-		case 'p': cfg.server_port = (uint16_t)strtol(optarg, NULL, 10); break;
+		case 'h': (void)strncpy(cfg->server_host, optarg, sizeof(cfg->server_host) - 1); break;
+		case 'p': cfg->server_port = (uint16_t)strtol(optarg, NULL, 10); break;
 		case 'i':
-			cfg.interval_sec = (uint16_t)strtol(optarg, NULL, 10);
-			if (cfg.interval_sec == 0) {
-				cfg.interval_sec = 1U;
-			}
+			cfg->interval_sec = (uint16_t)strtol(optarg, NULL, 10);
+			if (cfg->interval_sec == 0) cfg->interval_sec = 1U;
 			break;
 		case 'f':
 			file_mode   = 1;
@@ -248,9 +243,7 @@ int main(int argc, char **argv)
 			char *prefix  = strtok_r(optarg, ",", &saveptr);
 			while (prefix) {
 				prefix = trim_inplace(prefix);
-				if (*prefix != '\0') {
-					config_add_proc_prefix(&cfg, prefix);
-				}
+				if (*prefix != '\0') config_add_proc_prefix(cfg, prefix);
 				prefix = strtok_r(NULL, ",", &saveptr);
 			}
 			break;
@@ -260,20 +253,17 @@ int main(int argc, char **argv)
 		}
 	}
 
-	print_effective_config(&cfg);
+	print_effective_config(cfg);
 
 	for (int i = 0; g_collectors[i] != NULL; i++) {
 		if (g_collectors[i]->init) {
-			int rc = g_collectors[i]->init(g_collectors[i], &cfg);
+			int rc = g_collectors[i]->init(g_collectors[i], cfg);
 			if (rc != 0) {
 				TF_LOG_ERR("[%s] init failed (rc=%d), aborting", g_collectors[i]->name, rc);
 				return 1;
 			}
 		}
 	}
-
-	(void)signal(SIGINT, handle_signal);
-	(void)signal(SIGTERM, handle_signal);
 
 	if (file_mode) {
 		log_file = fopen(output_file, "ab");
@@ -293,15 +283,62 @@ int main(int argc, char **argv)
 			TF_LOG_ERR("socket: %s", strerror(errno));
 			return 1;
 		}
-
-		if (resolve_addr(cfg.server_host, cfg.server_port, &dest) != 0) {
-			TF_LOG_ERR("Failed to resolve %s", cfg.server_host);
+		if (resolve_addr(cfg->server_host, cfg->server_port, &dest) != 0) {
+			TF_LOG_ERR("Failed to resolve %s", cfg->server_host);
 			close(sock);
 			return 1;
 		}
 	}
+	return 0;
+}
+
+static void destroy_agent_state(void)
+{
+	if (file_mode && log_file) {
+		(void)fclose(log_file);
+		log_file = NULL;
+	}
+	else if (sock >= 0) {
+		close(sock);
+		sock = -1;
+	}
+
+	for (int i = 0; g_collectors[i] != NULL; i++) {
+		if (g_collectors[i]->destroy) {
+			g_collectors[i]->destroy(g_collectors[i]);
+		}
+	}
+}
+
+int main(int argc, char **argv)
+{
+	uint32_t seq      = 0;
+
+	uint8_t buffer[TF_FRAME_BUF_SIZE] = { 0 };
+	struct agent_config cfg           = { 0 };
+	struct tlv_writer writer          = { 0 };
+
+	(void)signal(SIGINT, handle_signal);
+	(void)signal(SIGTERM, handle_signal);
+	(void)signal(SIGHUP, handle_signal);
+
+	if (init_agent_state(argc, argv, &cfg) != 0) {
+		return 1;
+	}
 
 	while (keep_running) {
+		if (reload_config_flag) {
+			reload_config_flag = 0;
+			TF_LOG_INFO("SIGHUP received, reloading configuration...");
+			destroy_agent_state();
+			if (init_agent_state(argc, argv, &cfg) != 0) {
+				TF_LOG_ERR("Failed to reload configuration, exiting");
+				return 1;
+			}
+			TF_LOG_INFO("Configuration reloaded successfully");
+			continue;
+		}
+
 		uint32_t timestamp = (uint32_t)time(NULL);
 
 		if (tlv_init(&writer, buffer, sizeof(buffer), timestamp, seq++) != 0) {
@@ -357,21 +394,14 @@ int main(int argc, char **argv)
 				push_errors++;
 			}
 		}
-		sleep(cfg.interval_sec);
-	}
-
-	if (file_mode) {
-		(void)fclose(log_file);
-	}
-	else {
-		close(sock);
-	}
-
-	for (int i = 0; g_collectors[i] != NULL; i++) {
-		if (g_collectors[i]->destroy) {
-			g_collectors[i]->destroy(g_collectors[i]);
+		
+		unsigned int sleep_left = cfg.interval_sec;
+		while (sleep_left > 0 && keep_running && !reload_config_flag) {
+			sleep_left = sleep(sleep_left);
 		}
 	}
+
+	destroy_agent_state();
 
 	return 0;
 }
