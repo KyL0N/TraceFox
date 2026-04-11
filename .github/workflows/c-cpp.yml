@@ -39,4 +39,4 @@ jobs:
     - name: Run Python Server Tests
       working-directory: server
       run: |
-        python -m unittest discover -v -s . -p "test_*.py"
+        python3 test_protocol.py

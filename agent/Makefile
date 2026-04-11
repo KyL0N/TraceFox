@@ -5,6 +5,8 @@ GCC      ?= gcc
 MODE     ?= release
 SANITIZE ?= 0
 
+IS_CLANG := $(shell $(GCC) -dM -E - < /dev/null 2>/dev/null | grep -c __clang__)
+
 # -----------------------------
 # CFLAGS
 # -----------------------------
@@ -12,14 +14,22 @@ CFLAGS  ?= -std=gnu2x -fdata-sections -ffunction-sections \
 		-Wall -Wextra -Werror -pedantic\
 		-Wshadow -Wpointer-arith -Wcast-align -Wstrict-prototypes \
 		-Wmissing-prototypes -Wmissing-declarations -Wmissing-field-initializers \
-		-Wredundant-decls -Wformat=2 -Wformat-truncation=2 -Wformat-overflow=2 \
-		-Wstack-protector -Wstringop-overflow=2 -Wstringop-truncation \
-		-Wduplicated-cond -Wduplicated-branches -Wlogical-op \
-		-Wjump-misses-init -Wundef -Wwrite-strings -Wdouble-promotion \
+		-Wredundant-decls -Wformat=2 \
+		-Wstack-protector \
+		-Wundef -Wwrite-strings -Wdouble-promotion \
 		-Wsign-conversion -Wconversion \
 		-fstack-protector-strong -fstack-clash-protection -fno-common -fPIE \
 		-D_DEFAULT_SOURCE \
 		-MMD -MP
+
+ifeq ($(IS_CLANG),0)
+CFLAGS += -Wformat-truncation=2 -Wformat-overflow=2 \
+		-Wstringop-overflow=2 -Wstringop-truncation \
+		-Wduplicated-cond -Wduplicated-branches -Wlogical-op \
+		-Wjump-misses-init
+else
+CFLAGS += -Wno-gnu-zero-variadic-macro-arguments
+endif
 
 # LDFLAGS
 LDFLAGS ?= -static-pie -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,--build-id
