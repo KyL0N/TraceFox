@@ -122,16 +122,11 @@ static int cpu_push(struct cpu_ctx *ctx, struct tlv_writer *wrt)
 	uint8_t payload[TF_CPU_PAYLOAD_LEN] = { 0 };
 	uint8_t *payload_cursor             = payload;
 
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.user >> 8);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.user & TF_BYTE_MASK);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.system >> 8);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.system & TF_BYTE_MASK);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.idle >> 8);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.idle & TF_BYTE_MASK);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.iowait >> 8);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.iowait & TF_BYTE_MASK);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.irq >> 8);
-	*payload_cursor++ = (uint8_t)(ctx->last_payload.irq & TF_BYTE_MASK);
+	buf_put_be_u16(&payload_cursor, ctx->last_payload.user);
+	buf_put_be_u16(&payload_cursor, ctx->last_payload.system);
+	buf_put_be_u16(&payload_cursor, ctx->last_payload.idle);
+	buf_put_be_u16(&payload_cursor, ctx->last_payload.iowait);
+	buf_put_be_u16(&payload_cursor, ctx->last_payload.irq);
 
 	return tlv_put(wrt, TF_TYPE_CPU, payload, (uint8_t)(payload_cursor - payload));
 }

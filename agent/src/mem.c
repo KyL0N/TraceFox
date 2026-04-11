@@ -97,29 +97,12 @@ static int mem_push(struct mem_ctx *ctx, struct tlv_writer *wrt)
 	uint8_t payload[TF_MEM_PAYLOAD_LEN] = { 0 };
 	uint8_t *payload_cursor             = payload;
 
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_total_kb >> 24);
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_total_kb >> 16);
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_total_kb >> 8);
-	*payload_cursor++ = (uint8_t)ctx->last_mem.mem_total_kb;
-
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_free_kb >> 24);
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_free_kb >> 16);
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_free_kb >> 8);
-	*payload_cursor++ = (uint8_t)ctx->last_mem.mem_free_kb;
-
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_available_kb >> 24);
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_available_kb >> 16);
-	*payload_cursor++ = (uint8_t)(ctx->last_mem.mem_available_kb >> 8);
-	*payload_cursor++ = (uint8_t)ctx->last_mem.mem_available_kb;
-
-	*payload_cursor++ = (uint8_t)(ctx->last_load.load1_x100 >> 8);
-	*payload_cursor++ = (uint8_t)(ctx->last_load.load1_x100 & TF_BYTE_MASK);
-
-	*payload_cursor++ = (uint8_t)(ctx->last_load.load5_x100 >> 8);
-	*payload_cursor++ = (uint8_t)(ctx->last_load.load5_x100 & TF_BYTE_MASK);
-
-	*payload_cursor++ = (uint8_t)(ctx->last_load.load15_x100 >> 8);
-	*payload_cursor++ = (uint8_t)(ctx->last_load.load15_x100 & TF_BYTE_MASK);
+	buf_put_be_u32(&payload_cursor, ctx->last_mem.mem_total_kb);
+	buf_put_be_u32(&payload_cursor, ctx->last_mem.mem_free_kb);
+	buf_put_be_u32(&payload_cursor, ctx->last_mem.mem_available_kb);
+	buf_put_be_u16(&payload_cursor, ctx->last_load.load1_x100);
+	buf_put_be_u16(&payload_cursor, ctx->last_load.load5_x100);
+	buf_put_be_u16(&payload_cursor, ctx->last_load.load15_x100);
 
 	return tlv_put(wrt, TF_TYPE_MEM, payload, (uint8_t)(payload_cursor - payload));
 }
