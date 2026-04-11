@@ -88,6 +88,41 @@
 #define TF_MAX_COMM_PREFIX 32
 #define TF_COMM_PREFIX_LEN 32
 
+/* Log levels (lower value = higher severity) */
+enum tf_log_level
+{
+	TF_LOG_LVL_ERR  = 0,
+	TF_LOG_LVL_WARN = 1,
+	TF_LOG_LVL_INFO = 2,
+	TF_LOG_LVL_DBG  = 3,
+};
+
+extern enum tf_log_level g_tf_log_level;
+
+#define TF_LOG_ERR(fmt, ...)                                                                        \
+	do {                                                                                        \
+		if (TF_LOG_LVL_ERR <= g_tf_log_level)                                               \
+			(void)fprintf(stderr, "[ERR]  " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);       \
+	} while (0)
+
+#define TF_LOG_WARN(fmt, ...)                                                                       \
+	do {                                                                                        \
+		if (TF_LOG_LVL_WARN <= g_tf_log_level)                                              \
+			(void)fprintf(stderr, "[WARN] " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);       \
+	} while (0)
+
+#define TF_LOG_INFO(fmt, ...)                                                                       \
+	do {                                                                                        \
+		if (TF_LOG_LVL_INFO <= g_tf_log_level)                                              \
+			(void)fprintf(stderr, "[INFO] " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);       \
+	} while (0)
+
+#define TF_LOG_DBG(fmt, ...)                                                                        \
+	do {                                                                                        \
+		if (TF_LOG_LVL_DBG <= g_tf_log_level)                                               \
+			(void)fprintf(stderr, "[DBG]  " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);       \
+	} while (0)
+
 struct agent_config
 {
 	char server_host[64];

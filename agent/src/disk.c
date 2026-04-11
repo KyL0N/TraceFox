@@ -193,7 +193,7 @@ static int disk_collect(struct disk_ctx *ctx, const struct agent_config *cfg)
 
 	if (idx >= TF_MAX_DISKS && fgets(line, sizeof(line), disk_fp)) {
 		if (!ctx->truncated) {
-			(void)fprintf(stderr, "[disk] device limit (%d) reached, some devices dropped\n", TF_MAX_DISKS);
+			TF_LOG_WARN("[disk] device limit (%d) reached, some devices dropped", TF_MAX_DISKS);
 			ctx->truncated = 1;
 		}
 	}

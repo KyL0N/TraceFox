@@ -249,7 +249,7 @@ static void tracker_add_pid(struct proc_ctx *ctx, const char *comm, long pid)
 				lst->pids[lst->count++] = pid;
 			}
 			else {
-				(void)fprintf(stderr, "[proc] PID limit (%d) for group \"%s\", dropping pid %ld\n", TF_PROC_TRACK, ctx->watch_groups[i].name, pid);
+				TF_LOG_WARN("[proc] PID limit (%d) for group \"%s\", dropping pid %ld", TF_PROC_TRACK, ctx->watch_groups[i].name, pid);
 			}
 			return;
 		}
@@ -265,7 +265,7 @@ static void tracker_add_pid(struct proc_ctx *ctx, const char *comm, long pid)
 			ctx->watch_group_count++;
 		}
 		else {
-			(void)fprintf(stderr, "[proc] auto-group limit (%d) reached, dropping: %s\n", MAX_COMM_PREFIX, comm);
+			TF_LOG_WARN("[proc] auto-group limit (%d) reached, dropping: %s", MAX_COMM_PREFIX, comm);
 		}
 	}
 }

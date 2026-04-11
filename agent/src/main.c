@@ -8,7 +8,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <time.h>
-#include <stdbool.h>
 #include "tracefox.h"
 
 /* Generate extern declarations */
@@ -26,7 +25,7 @@ static struct tf_collector *g_collectors[] = {
 };
 
 static volatile sig_atomic_t keep_running = 1;
-static bool verbose                       = false;
+enum tf_log_level g_tf_log_level          = TF_LOG_LVL_INFO;
 
 static const char *const config_search_paths[] = {
 	"config/agent.conf",
@@ -118,9 +117,7 @@ static int load_config_file(const char *path, struct agent_config *cfg)
 
 		eqs = strchr(key, '=');
 		if (!eqs) {
-			if (verbose) {
-				(void)fprintf(stderr, "[config] ignore invalid line %u: %s\n", line_no, key);
-			}
+			TF_LOG_DBG("[config] ignore invalid line %u: %s", line_no, key);
 			continue;
 		}
 		*eqs = '\0';
@@ -139,8 +136,8 @@ static int load_config_file(const char *path, struct agent_config *cfg)
 			if (errno == 0 && parsed > 0 && parsed <= 65535) {
 				cfg->server_port = (uint16_t)parsed;
 			}
-			else if (verbose) {
-				(void)fprintf(stderr, "[config] invalid server_port at line %u: %s\n", line_no, val);
+			else {
+				TF_LOG_DBG("[config] invalid server_port at line %u: %s", line_no, val);
 			}
 		}
 		else if (strcmp(key, "interval") == 0) {
@@ -150,8 +147,8 @@ static int load_config_file(const char *path, struct agent_config *cfg)
 			if (errno == 0 && parsed > 0 && parsed <= 65535) {
 				cfg->interval_sec = (uint16_t)parsed;
 			}
-			else if (verbose) {
-				(void)fprintf(stderr, "[config] invalid interval at line %u: %s\n", line_no, val);
+			else {
+				TF_LOG_DBG("[config] invalid interval at line %u: %s", line_no, val);
 			}
 		}
 		else if (strcmp(key, "proc_prefix") == 0) {
@@ -174,8 +171,8 @@ static int load_config_file(const char *path, struct agent_config *cfg)
 
 static void print_effective_config(const struct agent_config *cfg)
 {
-	(void)fprintf(stderr, "[config] effective: server_host=%s server_port=%u interval=%u\n", cfg->server_host, (unsigned)cfg->server_port,
-	              (unsigned)cfg->interval_sec);
+	TF_LOG_DBG("[config] effective: server_host=%s server_port=%u interval=%u", cfg->server_host, (unsigned)cfg->server_port,
+	           (unsigned)cfg->interval_sec);
 }
 
 static void config_init_from_sources(int argc, char **argv, struct agent_config *cfg)
@@ -194,19 +191,19 @@ static void config_init_from_sources(int argc, char **argv, struct agent_config 
 
 	if (explicit_path) {
 		if (load_config_file(explicit_path, cfg) != 0) {
-			(void)fprintf(stderr, "[config] fatal: cannot open '%s': %s\n", explicit_path, strerror(errno));
+			TF_LOG_ERR("[config] fatal: cannot open '%s': %s", explicit_path, strerror(errno));
 			exit(1);
 		}
-		(void)fprintf(stderr, "[config] loaded: %s\n", explicit_path);
+		TF_LOG_INFO("[config] loaded: %s", explicit_path);
 	}
 	else {
 		const char *found = find_config_file();
 		if (found) {
 			(void)load_config_file(found, cfg);
-			(void)fprintf(stderr, "[config] loaded: %s\n", found);
+			TF_LOG_INFO("[config] loaded: %s", found);
 		}
 		else {
-			(void)fprintf(stderr, "[config] no config file found, using defaults\n");
+			TF_LOG_INFO("[config] no config file found, using defaults");
 		}
 	}
 }
@@ -258,20 +255,18 @@ int main(int argc, char **argv)
 			}
 			break;
 		}
-		case 'v': verbose = true; break;
-		default: (void)fprintf(stderr, "Usage: %s [-c config] [-h host] [-p port] [-i interval] [-f file] [-P proc_prefix1,...] [-v]\n", argv[0]); return 1;
+		case 'v': g_tf_log_level = TF_LOG_LVL_DBG; break;
+		default: TF_LOG_ERR("Usage: %s [-c config] [-h host] [-p port] [-i interval] [-f file] [-P proc_prefix1,...] [-v]", argv[0]); return 1;
 		}
 	}
 
-	if (verbose) {
-		print_effective_config(&cfg);
-	}
+	print_effective_config(&cfg);
 
 	for (int i = 0; g_collectors[i] != NULL; i++) {
 		if (g_collectors[i]->init) {
 			int rc = g_collectors[i]->init(g_collectors[i], &cfg);
 			if (rc != 0) {
-				(void)fprintf(stderr, "[%s] init failed (rc=%d), aborting\n", g_collectors[i]->name, rc);
+				TF_LOG_ERR("[%s] init failed (rc=%d), aborting", g_collectors[i]->name, rc);
 				return 1;
 			}
 		}
@@ -283,7 +278,7 @@ int main(int argc, char **argv)
 	if (file_mode) {
 		log_file = fopen(output_file, "ab");
 		if (!log_file) {
-			perror("fopen");
+			TF_LOG_ERR("fopen(%s): %s", output_file, strerror(errno));
 			return 1;
 		}
 		(void)fseek(log_file, 0, SEEK_END);
@@ -295,12 +290,12 @@ int main(int argc, char **argv)
 	else {
 		sock = socket(AF_INET, SOCK_DGRAM, 0);
 		if (sock < 0) {
-			perror("socket");
+			TF_LOG_ERR("socket: %s", strerror(errno));
 			return 1;
 		}
 
 		if (resolve_addr(cfg.server_host, cfg.server_port, &dest) != 0) {
-			(void)fprintf(stderr, "Failed to resolve %s\n", cfg.server_host);
+			TF_LOG_ERR("Failed to resolve %s", cfg.server_host);
 			close(sock);
 			return 1;
 		}
@@ -321,18 +316,18 @@ int main(int argc, char **argv)
 			if (col->collect_and_push) {
 				int err = col->collect_and_push(col, &writer, &cfg, &sctx);
 				if (err != 0) {
-					(void)fprintf(stderr, "[%s] collect_and_push failed with err: %d\n", col->name, err);
+					TF_LOG_ERR("[%s] collect_and_push failed with err: %d", col->name, err);
 					push_errors++;
 				}
 			}
 		}
 
-		if (verbose) {
-			printf("==== tracefox-agent sample @ %u (tlv_errors=%lu) ====\n", timestamp, push_errors);
+		if (g_tf_log_level >= TF_LOG_LVL_DBG) {
+			TF_LOG_DBG("==== tracefox-agent sample @ %u (tlv_errors=%lu) ====", timestamp, push_errors);
 			for (int i = 0; g_collectors[i] != NULL; i++) {
 				struct tf_collector *col = g_collectors[i];
 				if (col->print) {
-					col->print(col, stdout);
+					col->print(col, stderr);
 				}
 			}
 		}
