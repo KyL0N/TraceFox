@@ -239,16 +239,18 @@ static int disk_push(struct disk_ctx *ctx, struct tlv_writer *wrt)
 	return tlv_put(wrt, TF_TYPE_DISK, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int disk_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
+static int disk_collect_api(struct tf_collector *col, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	(void)sctx;
 	struct disk_ctx *ctx = (struct disk_ctx *)col->ctx;
 	if (!ctx) return -1;
+	return disk_collect(ctx, cfg);
+}
 
-	if (disk_collect(ctx, cfg) != 0) {
-		return -1;
-	}
-
+static int disk_push_api(struct tf_collector *col, struct tlv_writer *wrt)
+{
+	struct disk_ctx *ctx = (struct disk_ctx *)col->ctx;
+	if (!ctx) return -1;
 	return disk_push(ctx, wrt);
 }
 
@@ -273,6 +275,7 @@ struct tf_collector disk_collector = {
 	.ctx              = NULL,
 	.init             = disk_init,
 	.destroy          = disk_destroy,
-	.collect_and_push = disk_collect_and_push,
+	.collect          = disk_collect_api,
+	.push             = disk_push_api,
 	.print            = disk_print,
 };

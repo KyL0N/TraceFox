@@ -107,16 +107,18 @@ static int mem_push(struct mem_ctx *ctx, struct tlv_writer *wrt)
 	return tlv_put(wrt, TF_TYPE_MEM, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int mem_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
+static int mem_collect_api(struct tf_collector *col, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	(void)sctx;
 	struct mem_ctx *ctx = (struct mem_ctx *)col->ctx;
 	if (!ctx) return -1;
+	return mem_collect(ctx, cfg);
+}
 
-	if (mem_collect(ctx, cfg) != 0) {
-		return -1;
-	}
-
+static int mem_push_api(struct tf_collector *col, struct tlv_writer *wrt)
+{
+	struct mem_ctx *ctx = (struct mem_ctx *)col->ctx;
+	if (!ctx) return -1;
 	return mem_push(ctx, wrt);
 }
 
@@ -141,6 +143,7 @@ struct tf_collector mem_collector = {
 	.ctx              = NULL,
 	.init             = mem_init,
 	.destroy          = mem_destroy,
-	.collect_and_push = mem_collect_and_push,
+	.collect          = mem_collect_api,
+	.push             = mem_push_api,
 	.print            = mem_print,
 };

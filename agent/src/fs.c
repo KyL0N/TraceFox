@@ -134,16 +134,18 @@ static int fs_push(struct fs_ctx *ctx, struct tlv_writer *wrt)
 	return tlv_put(wrt, TF_TYPE_FS, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int fs_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
+static int fs_collect_api(struct tf_collector *col, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	(void)sctx;
 	struct fs_ctx *ctx = (struct fs_ctx *)col->ctx;
 	if (!ctx) return -1;
+	return fs_collect(ctx, cfg);
+}
 
-	if (fs_collect(ctx, cfg) != 0) {
-		return -1;
-	}
-
+static int fs_push_api(struct tf_collector *col, struct tlv_writer *wrt)
+{
+	struct fs_ctx *ctx = (struct fs_ctx *)col->ctx;
+	if (!ctx) return -1;
 	return fs_push(ctx, wrt);
 }
 
@@ -164,6 +166,7 @@ struct tf_collector fs_collector = {
 	.ctx              = NULL,
 	.init             = fs_init,
 	.destroy          = fs_destroy,
-	.collect_and_push = fs_collect_and_push,
+	.collect          = fs_collect_api,
+	.push             = fs_push_api,
 	.print            = fs_print,
 };
