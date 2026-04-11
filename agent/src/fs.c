@@ -78,7 +78,7 @@ static int fs_collect(struct fs_ctx * ctx, const struct agent_config * cfg)
 
 		uint64_t total  = (uint64_t)svfs.f_blocks * svfs.f_frsize / (uint64_t)TF_KB;
 		uint64_t freeb  = (uint64_t)svfs.f_bfree * svfs.f_frsize / (uint64_t)TF_KB;
-		entry->total_kb = (uint32_t)total;
+		entry->total_kb = total;
 
 		if (total == 0) {
 			entry->used_pct_x10 = 0;
@@ -127,10 +127,14 @@ static int fs_push(struct fs_ctx * ctx, struct tlv_writer * wrt)
 
 		memcpy(payload_cursor, name, sizeof(name));
 		payload_cursor += sizeof(name);
-		*payload_cursor++ = (uint8_t)(entry->total_kb >> 24);
-		*payload_cursor++ = (uint8_t)(entry->total_kb >> 16);
-		*payload_cursor++ = (uint8_t)(entry->total_kb >> 8);
-		*payload_cursor++ = (uint8_t)entry->total_kb;
+		*payload_cursor++ = (uint8_t)((entry->total_kb >> 56) & TF_BYTE_MASK);
+		*payload_cursor++ = (uint8_t)((entry->total_kb >> 48) & TF_BYTE_MASK);
+		*payload_cursor++ = (uint8_t)((entry->total_kb >> 40) & TF_BYTE_MASK);
+		*payload_cursor++ = (uint8_t)((entry->total_kb >> 32) & TF_BYTE_MASK);
+		*payload_cursor++ = (uint8_t)((entry->total_kb >> 24) & TF_BYTE_MASK);
+		*payload_cursor++ = (uint8_t)((entry->total_kb >> 16) & TF_BYTE_MASK);
+		*payload_cursor++ = (uint8_t)((entry->total_kb >> 8) & TF_BYTE_MASK);
+		*payload_cursor++ = (uint8_t)(entry->total_kb & TF_BYTE_MASK);
 		*payload_cursor++ = (uint8_t)(entry->used_pct_x10 >> 8);
 		*payload_cursor++ = (uint8_t)(entry->used_pct_x10 & TF_BYTE_MASK);
 	}
@@ -158,7 +162,7 @@ static void fs_print(struct tf_collector * col, FILE * out)
 
 	(void)fprintf(out, "FS  : count=%zu\n", ctx->count);
 	for (size_t i = 0; i < ctx->count; i++) {
-		(void)fprintf(out, "  - %s: total=%u kB used=%u.%1u%%%%\n", ctx->entries[i].mount, ctx->entries[i].total_kb,
+		(void)fprintf(out, "  - %s: total=%llu kB used=%u.%1u%%%%\n", ctx->entries[i].mount, (unsigned long long)ctx->entries[i].total_kb,
 		              ctx->entries[i].used_pct_x10 / TF_PERCENT_DIV, ctx->entries[i].used_pct_x10 % TF_PERCENT_DIV);
 	}
 }
