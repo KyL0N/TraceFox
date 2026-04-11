@@ -1,0 +1,76 @@
+CompileFlags:
+  CompilationDatabase: "."
+  Add:
+    - -std=gnu2x
+    - -Wall
+    - -Wextra
+    - -Werror
+    - -Wshadow
+    - -Wpointer-arith
+    - -Wcast-align
+    - -Wstrict-prototypes
+    - -Wmissing-prototypes
+    - -Wmissing-declarations
+    - -Wmissing-field-initializers
+    - -Wredundant-decls
+    - -Wformat=2
+    - -Wundef
+    - -Wwrite-strings
+    - -Wdouble-promotion
+    - -Wsign-conversion
+    - -Wconversion
+    - -Wvla
+    - "-I../include"
+
+---
+If:
+  PathMatch: '.*\.(h|hpp)$'
+CompileFlags:
+  Add:
+    - -xc
+    - -std=gnu2x
+
+---
+Diagnostics:
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - cert-*
+      - clang-analyzer-*
+      - misc-*
+      - readability-*
+      - portability-*
+
+    Remove:
+      - readability-magic-numbers
+      - readability-identifier-length
+      - readability-braces-around-statements
+      - readability-function-cognitive-complexity
+      - readability-isolate-declaration
+      - readability-implicit-bool-conversion
+
+      - bugprone-easily-swappable-parameters
+      - bugprone-narrowing-conversions
+      - bugprone-branch-clone
+
+      - llvmlibc-*
+      - llvm-*
+      - google-*
+      - hicpp-*
+      - cppcoreguidelines-*
+      - modernize-*
+      - performance-*
+
+Index:
+  Background: Build
+  StandardLibrary: Yes
+
+Completion:
+  AllScopes: true
+
+Hover:
+  ShowAKA: true
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true

@@ -1,0 +1,48 @@
+services:
+  tracefox-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    network_mode: host
+    environment:
+      - TRACEFOX_VM_URL=http://127.0.0.1:8428
+      - TRACEFOX_UDP_PORT=${TRACEFOX_UDP_PORT:-9000}
+      - TRACEFOX_HOST_LABEL=${TRACEFOX_HOST_LABEL:-}
+      - TRACEFOX_VERBOSE=${TRACEFOX_VERBOSE:-0}
+    depends_on:
+      victoriametrics:
+        condition: service_started
+    restart: unless-stopped
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:latest
+    network_mode: host
+    volumes:
+      - vm-data:/victoria-metrics-data
+    command:
+      - "-retentionPeriod=30d"
+      - "-httpListenAddr=:8428"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    network_mode: host
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-tracefox}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/tracefox-overview.json
+    depends_on:
+      victoriametrics:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  vm-data:
+  grafana-data:

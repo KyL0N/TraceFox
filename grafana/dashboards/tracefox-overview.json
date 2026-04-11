@@ -1,0 +1,897 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "System Uptime",
+      "description": "Time since the forwarder first saw this host",
+      "gridPos": { "h": 7, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "tracefox_uptime_seconds{host=~\"$host\"}",
+          "legendFormat": "{{ host }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00C896", "value": null }
+            ]
+          },
+          "unit": "dtdurations",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Disk Space",
+      "description": "Filesystem usage percentage per mount point",
+      "gridPos": { "h": 7, "w": 10, "x": 4, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_fs_used_pct{host=~\"$host\"}[$__interval])",
+          "legendFormat": "{{ mount }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 80 },
+              { "color": "red", "value": 92 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Read/Write Requests Issued",
+      "description": "Disk read and write IOPS (delta per interval)",
+      "gridPos": { "h": 7, "w": 10, "x": 14, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_disk_read_iops{host=~\"$host\",device=~\"$device\"}[$__interval])",
+          "legendFormat": "{{ device }} read",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "-avg_over_time(tracefox_disk_write_iops{host=~\"$host\",device=~\"$device\"}[$__interval])",
+          "legendFormat": "{{ device }} write",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "iops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "CPU Breakdown (%)",
+      "description": "CPU usage decomposed by user, system, iowait, and irq",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_cpu_user_pct{host=~\"$host\"}[$__interval])",
+          "legendFormat": "{{ host }} user",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_cpu_system_pct{host=~\"$host\"}[$__interval])",
+          "legendFormat": "{{ host }} system",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_cpu_iowait_pct{host=~\"$host\"}[$__interval])",
+          "legendFormat": "{{ host }} iowait",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_cpu_irq_pct{host=~\"$host\"}[$__interval])",
+          "legendFormat": "{{ host }} irq",
+          "refId": "D"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_cpu_user_pct{host=~\"$host\"}[$__interval]) + avg_over_time(tracefox_cpu_system_pct{host=~\"$host\"}[$__interval]) + avg_over_time(tracefox_cpu_iowait_pct{host=~\"$host\"}[$__interval]) + avg_over_time(tracefox_cpu_irq_pct{host=~\"$host\"}[$__interval])",
+          "legendFormat": "{{ host }} total",
+          "refId": "E"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*user" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#774AA4", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*system" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#E55B3A", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*iowait" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#EFAD08", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*irq" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#16B8CE", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*total" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#6C6EA0", "mode": "fixed" } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.fillOpacity", "value": 0 }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "RAM Breakdown",
+      "description": "Memory usage decomposed: used (non-reclaimable), buffers/cache (reclaimable), free",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "(avg_over_time(tracefox_mem_total_kb{host=~\"$host\"}[$__interval]) - avg_over_time(tracefox_mem_available_kb{host=~\"$host\"}[$__interval])) / 1048576",
+          "legendFormat": "{{ host }} used",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "(avg_over_time(tracefox_mem_available_kb{host=~\"$host\"}[$__interval]) - avg_over_time(tracefox_mem_free_kb{host=~\"$host\"}[$__interval])) / 1048576",
+          "legendFormat": "{{ host }} buffers/cache",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_mem_free_kb{host=~\"$host\"}[$__interval]) / 1048576",
+          "legendFormat": "{{ host }} free",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "mode": "normal", "group": "A" },
+            "axisBorderShow": false,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "decgbytes",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*used" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#FF6B6B", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*buffers" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#F5A623", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*free" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#00C896", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Network Traffic",
+      "description": "Network throughput per interface and total. Positive = received, negative = sent.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "rate(tracefox_net_rx_bytes_total{host=~\"$host\",interface=~\"$interface\"}[$__rate_interval]) * 8",
+          "legendFormat": "{{ interface }} recv",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "-rate(tracefox_net_tx_bytes_total{host=~\"$host\",interface=~\"$interface\"}[$__rate_interval]) * 8",
+          "legendFormat": "{{ interface }} sent",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum(rate(tracefox_net_rx_bytes_total{host=~\"$host\",interface=~\"$interface\"}[$__rate_interval])) by (host) * 8",
+          "legendFormat": "{{ host }} total recv",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "-sum(rate(tracefox_net_tx_bytes_total{host=~\"$host\",interface=~\"$interface\"}[$__rate_interval])) by (host) * 8",
+          "legendFormat": "{{ host }} total sent",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "bps"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*recv" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#00C896", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*sent" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#E84545", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*total recv" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#00C896", "mode": "fixed" } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.fillOpacity", "value": 0 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 5] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*total sent" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#E84545", "mode": "fixed" } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.fillOpacity", "value": 0 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 5] } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Disk Latency (by device)",
+      "description": "Average I/O latency in milliseconds per disk device",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "(rate(tracefox_disk_read_ms_total{host=~\"$host\",device=~\"$device\"}[$__rate_interval]) + rate(tracefox_disk_write_ms_total{host=~\"$host\",device=~\"$device\"}[$__rate_interval])) / clamp_min(rate(tracefox_disk_reads_completed_total{host=~\"$host\",device=~\"$device\"}[$__rate_interval]) + rate(tracefox_disk_writes_completed_total{host=~\"$host\",device=~\"$device\"}[$__rate_interval]), 0.001)",
+          "legendFormat": "{{ device }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 0,
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "ms",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "MemAvailable with Forecast",
+      "description": "Available memory and 24-hour linear forecast. MemAvailable is more stable than used memory as it accounts for reclaimable caches.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_mem_available_kb{host=~\"$host\"}[$__interval]) / 1048576",
+          "legendFormat": "{{ host }} MemAvailable",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "predict_linear(tracefox_mem_available_kb{host=~\"$host\"}[1h], 3600*24) / 1048576",
+          "legendFormat": "{{ host }} Forecast (24h)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "decgbytes",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*MemAvailable" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#00C896", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 15 }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*Forecast" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#73DFB1", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+              { "id": "custom.fillOpacity", "value": 8 },
+              { "id": "custom.fillBelowTo", "value": "" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 9,
+      "type": "gauge",
+      "title": "CPU Usage",
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "tracefox_cpu_user_pct{host=~\"$host\"} + tracefox_cpu_system_pct{host=~\"$host\"}",
+          "legendFormat": "{{ host }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00C896", "value": null },
+              { "color": "#F5A623", "value": 70 },
+              { "color": "#E84545", "value": 90 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 10,
+      "type": "gauge",
+      "title": "Memory Usage",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "tracefox_mem_used_pct{host=~\"$host\"}",
+          "legendFormat": "{{ host }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00C896", "value": null },
+              { "color": "#F5A623", "value": 75 },
+              { "color": "#E84545", "value": 90 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 11,
+      "type": "gauge",
+      "title": "System Load (1m)",
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "tracefox_load_1m{host=~\"$host\"}",
+          "legendFormat": "{{ host }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00C896", "value": null },
+              { "color": "#F5A623", "value": 4 },
+              { "color": "#E84545", "value": 8 }
+            ]
+          },
+          "unit": "short",
+          "min": 0,
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 12,
+      "type": "gauge",
+      "title": "Peak Disk Util",
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "max(tracefox_disk_io_util_pct{host=~\"$host\"}) by (host)",
+          "legendFormat": "{{ host }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00C896", "value": null },
+              { "color": "#F5A623", "value": 60 },
+              { "color": "#E84545", "value": 85 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 13,
+      "type": "bargauge",
+      "title": "Filesystem Usage",
+      "description": "Current usage per mount point",
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "tracefox_fs_used_pct{host=~\"$host\"}",
+          "legendFormat": "{{ host }}:{{ mount }}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00C896", "value": null },
+              { "color": "#F5A623", "value": 80 },
+              { "color": "#E84545", "value": 92 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "namePlacement": "auto"
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Load Averages",
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "tracefox_load_1m{host=~\"$host\"}",
+          "legendFormat": "1m",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "tracefox_load_5m{host=~\"$host\"}",
+          "legendFormat": "5m",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "tracefox_load_15m{host=~\"$host\"}",
+          "legendFormat": "15m",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00C896", "value": null },
+              { "color": "#F5A623", "value": 4 },
+              { "color": "#E84545", "value": 8 }
+            ]
+          },
+          "unit": "short",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "vertical",
+        "textMode": "value_and_name",
+        "wideLayout": false,
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 15,
+      "type": "row",
+      "title": "Process Groups",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+      "panels": []
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Process CPU Usage",
+      "description": "CPU usage percentage per process group over time",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_proc_cpu_pct{host=~\"$host\",group=~\"$procgroup\"}[$__interval])",
+          "legendFormat": "{{ group }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Process RAM Usage",
+      "description": "Resident memory (RSS) per process group over time",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "avg_over_time(tracefox_proc_rss_kb{host=~\"$host\",group=~\"$procgroup\"}[$__interval]) / 1024",
+          "legendFormat": "{{ group }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "unit": "decmbytes",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max", "lastNotNull"] }
+      }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["tracefox", "embedded", "monitoring"],
+  "templating": {
+    "list": [
+      {
+        "name": "host",
+        "type": "query",
+        "query": "label_values(tracefox_up, host)",
+        "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1,
+        "label": "Host"
+      },
+      {
+        "name": "device",
+        "type": "query",
+        "query": "label_values(tracefox_disk_io_util_pct{host=~\"$host\"}, device)",
+        "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1,
+        "label": "Device"
+      },
+      {
+        "name": "interface",
+        "type": "query",
+        "query": "label_values(tracefox_net_rx_bytes_total{host=~\"$host\"}, interface)",
+        "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1,
+        "label": "Interface"
+      },
+      {
+        "name": "procgroup",
+        "type": "query",
+        "query": "label_values(tracefox_proc_cpu_pct{host=~\"$host\"}, group)",
+        "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1,
+        "label": "Process Group"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m"],
+    "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+  },
+  "timezone": "",
+  "title": "TraceFox Server Status",
+  "uid": "tracefox-overview",
+  "version": 0,
+  "weekStart": ""
+}

@@ -1,0 +1,4 @@
+# metrics_forwarder.py uses only the Python standard library.
+# data_server.py (Streamlit dashboard, optional) needs:
+# streamlit
+# pandas

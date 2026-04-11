@@ -1,0 +1,12 @@
+/* collector_list.def */
+/* 
+ * This file uses X-Macros to define the list of all active collectors.
+ * To add a new collector, simply add a COLLECTOR(name) entry here.
+ */
+#define COLLECTOR_LIST \
+	COLLECTOR(cpu) \
+	COLLECTOR(mem) \
+	COLLECTOR(net) \
+	COLLECTOR(disk) \
+	COLLECTOR(fs) \
+	COLLECTOR(proc)

@@ -1,0 +1,297 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: TraceFox Alerts
+    folder: TraceFox
+    interval: 1m
+    rules:
+      # ── CPU Usage Critical ──────────────────────────
+      - uid: tf-cpu-critical
+        title: High CPU Usage
+        condition: C
+        for: 5m
+        annotations:
+          summary: "CPU usage above 90% on {{ $labels.host }}"
+          description: "Combined user+system CPU has been above 90% for 5 minutes."
+        labels:
+          severity: critical
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              expr: "tracefox_cpu_user_pct + tracefox_cpu_system_pct"
+              intervalMs: 5000
+              maxDataPoints: 120
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: mean
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 90
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # ── Memory Usage Critical ───────────────────────
+      - uid: tf-mem-critical
+        title: High Memory Usage
+        condition: C
+        for: 5m
+        annotations:
+          summary: "Memory usage above 90% on {{ $labels.host }}"
+          description: "Memory utilization has been above 90% for 5 minutes."
+        labels:
+          severity: critical
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              expr: "tracefox_mem_used_pct"
+              intervalMs: 5000
+              maxDataPoints: 120
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: mean
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 90
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # ── Disk IO Utilization High ────────────────────
+      - uid: tf-disk-util-high
+        title: High Disk IO Utilization
+        condition: C
+        for: 5m
+        annotations:
+          summary: "Disk IO util above 85% on {{ $labels.host }} device {{ $labels.device }}"
+          description: "Disk IO utilization has been above 85% for 5 minutes."
+        labels:
+          severity: warning
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              expr: "tracefox_disk_io_util_pct"
+              intervalMs: 5000
+              maxDataPoints: 120
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: mean
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 85
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # ── Filesystem Usage Critical ───────────────────
+      - uid: tf-fs-critical
+        title: Filesystem Nearly Full
+        condition: C
+        for: 10m
+        annotations:
+          summary: "Filesystem {{ $labels.mount }} above 92% on {{ $labels.host }}"
+          description: "Filesystem usage has been above 92% for 10 minutes."
+        labels:
+          severity: critical
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              expr: "tracefox_fs_used_pct"
+              intervalMs: 5000
+              maxDataPoints: 120
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 92
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # ── Agent Down ──────────────────────────────────
+      - uid: tf-agent-down
+        title: TraceFox Agent Down
+        condition: C
+        for: 2m
+        annotations:
+          summary: "No data from TraceFox agent on {{ $labels.host }}"
+          description: "The agent has not sent metrics for at least 2 minutes."
+        labels:
+          severity: critical
+        noDataState: Alerting
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 120
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              expr: "tracefox_up"
+              intervalMs: 5000
+              maxDataPoints: 24
+          - refId: B
+            relativeTimeRange:
+              from: 120
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 120
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 1
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
