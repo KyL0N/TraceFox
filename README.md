@@ -38,7 +38,6 @@ TraceFox/
 ├── server/                     服务端
 │   ├── tracefox_protocol.py    TLV v2 帧解析器（共享模块）
 │   ├── metrics_forwarder.py    核心转发：UDP → Prometheus → VictoriaMetrics
-│   ├── data_server.py          旧版 Streamlit 实时仪表盘（调试用）
 │   ├── test_server.py          最小 UDP 调试服务器（终端打印）
 │   ├── Dockerfile              Forwarder 容器镜像
 │   └── requirements.txt        Python 依赖说明
@@ -100,7 +99,7 @@ sudo docker compose up -d
 
 启动后：
 - **VictoriaMetrics**：`http://<IP>:8428`
-- **Grafana**：`http://<IP>:3000`（默认账号 `admin` / `.env` 中配置的密码）
+- **Grafana**：`http://<IP>:3000`（账号 `admin`，密码见 `.env` 中 `GRAFANA_PASSWORD`，请务必修改默认密码）
 - **Forwarder**：监听 UDP `:9000`
 
 ### 3. 启动 Agent
@@ -114,15 +113,17 @@ sudo docker compose up -d
 | `-h` | 服务端地址 | `127.0.0.1` |
 | `-p` | UDP 端口 | `9000` |
 | `-i` | 采集间隔（秒） | `5` |
-| `-c` | 配置文件路径 | `config/agent.conf` |
+| `-c` | 配置文件路径 | 自动搜索（见下文） |
 | `-f` | 写入文件（替代 UDP） | — |
 | `-v` | 详细输出 | 关闭 |
 
-Agent 启动时会先读取配置文件（默认 `agent/config/agent.conf`，可用 `-c <path>` 指定），再应用命令行参数。优先级如下：
+Agent 启动时按以下路径搜索配置文件：`config/agent.conf` → `agent/config/agent.conf` → `/etc/tracefox/agent.conf`。可用 `-c <path>` 显式指定（指定路径不存在时直接退出）。配置优先级：
 
 1. 命令行参数（最高）
-2. `agent.conf`
+2. 配置文件
 3. 内置默认值（最低）
+
+启动时会打印实际加载的配置路径；`-v` 模式下打印所有生效值。
 
 ### 4. 查看大盘
 
@@ -167,7 +168,8 @@ python3 test_server.py              # 终端打印解析后的帧
 | `TRACEFOX_UDP_PORT` | UDP 监听端口 | `9000` |
 | `TRACEFOX_VM_URL` | VictoriaMetrics 地址 | `http://127.0.0.1:8428` |
 | `TRACEFOX_VERBOSE` | 详细日志（`0`/`1`） | `0` |
-| `GRAFANA_PASSWORD` | Grafana admin 密码 | `tracefox` |
+| `TRACEFOX_QUEUE_SIZE` | Forwarder 内部队列大小 | `1000` |
+| `GRAFANA_PASSWORD` | Grafana admin 密码 | `tracefox`（请修改） |
 
 ## 指标列表
 
@@ -185,8 +187,8 @@ python3 test_server.py              # 终端打印解析后的帧
 | `tracefox_mem_total_kb` | Gauge | 总内存（KB） |
 | `tracefox_mem_free_kb` | Gauge | 空闲内存（KB） |
 | `tracefox_mem_available_kb` | Gauge | 可用内存（KB） |
-| `tracefox_mem_used_kb` | Gauge | 已用内存（KB） |
-| `tracefox_mem_used_pct` | Gauge | 内存使用率（%） |
+| `tracefox_mem_used_kb` | Gauge | 已用内存（KB，基于 MemAvailable） |
+| `tracefox_mem_used_pct` | Gauge | 内存使用率（%，基于 MemAvailable） |
 | `tracefox_load_1m` | Gauge | 1 分钟负载均值 |
 | `tracefox_load_5m` | Gauge | 5 分钟负载均值 |
 | `tracefox_load_15m` | Gauge | 15 分钟负载均值 |
@@ -202,3 +204,13 @@ python3 test_server.py              # 终端打印解析后的帧
 | `tracefox_proc_instances` | Gauge | 进程组实例数 |
 | `tracefox_proc_cpu_pct` | Gauge | 进程组 CPU 使用率（%） |
 | `tracefox_proc_rss_kb` | Gauge | 进程组 RSS 总和（KB） |
+
+## 部署说明
+
+- 所有服务使用 `network_mode: host`，直接使用宿主机网络
+- VictoriaMetrics 监听 `:8428`，Grafana 监听 `:3000`，Forwarder 监听 UDP `:9000`
+- **安全建议**：生产环境部署前务必修改 `.env` 中的 `GRAFANA_PASSWORD`
+- 镜像版本已固定（VictoriaMetrics `v1.106.1`、Grafana `11.4.0`），避免 `:latest` 带来的不可预期升级
+- Grafana 匿名访问默认关闭，需登录后使用
+- 磁盘累计计数器使用 64 位，支持长时间运行和大容量设备
+- 文件系统使用率基于 `f_bavail`（普通用户可用空间），与 `df` 一致
