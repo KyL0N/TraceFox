@@ -221,8 +221,9 @@ struct tf_collector
 	int (*init)(struct tf_collector * col, const struct agent_config * cfg);
 	void (*destroy)(struct tf_collector * col);
 
-	/* 对外统一执行采集并写入，内部再解耦为 collect 和 push */
-	int (*collect_and_push)(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx);
+	/* 解耦架构：分离采集计算与网络打包 */
+	int (*collect)(struct tf_collector * col, const struct agent_config * cfg, struct sample_context * sctx);
+	int (*push)(struct tf_collector * col, struct tlv_writer * wrt);
 
 	/* 打印调试信息，传入 FILE * 便于重定向 */
 	void (*print)(struct tf_collector * col, FILE * out);

@@ -131,7 +131,7 @@ static int cpu_push(struct cpu_ctx *ctx, struct tlv_writer *wrt)
 	return tlv_put(wrt, TF_TYPE_CPU, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int cpu_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
+static int cpu_collect_api(struct tf_collector *col, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	struct cpu_ctx *ctx = (struct cpu_ctx *)col->ctx;
 	if (!ctx) return -1;
@@ -143,7 +143,13 @@ static int cpu_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt
 	if (sctx) {
 		sctx->cpu_total_diff = g_last_diff_total ? g_last_diff_total : 1;
 	}
+	return 0;
+}
 
+static int cpu_push_api(struct tf_collector *col, struct tlv_writer *wrt)
+{
+	struct cpu_ctx *ctx = (struct cpu_ctx *)col->ctx;
+	if (!ctx) return -1;
 	return cpu_push(ctx, wrt);
 }
 
@@ -165,6 +171,7 @@ struct tf_collector cpu_collector = {
 	.ctx              = NULL,
 	.init             = cpu_init,
 	.destroy          = cpu_destroy,
-	.collect_and_push = cpu_collect_and_push,
+	.collect          = cpu_collect_api,
+	.push             = cpu_push_api,
 	.print            = cpu_print,
 };
