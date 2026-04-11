@@ -7,6 +7,7 @@ struct net_ctx
 {
 	struct net_entry entries[TF_MAX_INTERFACES];
 	size_t count;
+	int truncated;
 };
 
 static int net_init(struct tf_collector * col, const struct agent_config * cfg)
@@ -76,6 +77,13 @@ static int net_collect(struct net_ctx * ctx, const struct agent_config * cfg)
 		entry->tx_bytes                      = tx_bytes;
 
 		idx++;
+	}
+
+	if (idx >= TF_MAX_INTERFACES && fgets(line, sizeof(line), net_dev_fp)) {
+		if (!ctx->truncated) {
+			(void)fprintf(stderr, "[net] interface limit (%d) reached, some interfaces dropped\n", TF_MAX_INTERFACES);
+			ctx->truncated = 1;
+		}
 	}
 
 	(void)fclose(net_dev_fp);
