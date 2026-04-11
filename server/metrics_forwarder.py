@@ -117,9 +117,10 @@ def frame_to_prometheus(frame: dict, host: str) -> str:
         emit("tracefox_mem_total_kb", hl, mem["total_kb"])
         emit("tracefox_mem_free_kb", hl, mem["free_kb"])
         emit("tracefox_mem_available_kb", hl, mem["avail_kb"])
-        emit("tracefox_mem_used_kb", hl, mem["used_kb"])
+        used_kb = max(mem["total_kb"] - mem["avail_kb"], 0)
+        emit("tracefox_mem_used_kb", hl, used_kb)
         if mem["total_kb"] > 0:
-            pct = round(mem["used_kb"] / mem["total_kb"] * 100, 1)
+            pct = round(used_kb / mem["total_kb"] * 100, 1)
             emit("tracefox_mem_used_pct", hl, pct)
 
     load = frame.get("load")

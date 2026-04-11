@@ -77,7 +77,7 @@ static int fs_collect(struct fs_ctx * ctx, const struct agent_config * cfg)
 		entry->mount[sizeof(entry->mount) - 1] = '\0';
 
 		uint64_t total  = (uint64_t)svfs.f_blocks * svfs.f_frsize / (uint64_t)TF_KB;
-		uint64_t freeb  = (uint64_t)svfs.f_bfree * svfs.f_frsize / (uint64_t)TF_KB;
+		uint64_t freeb  = (uint64_t)svfs.f_bavail * svfs.f_frsize / (uint64_t)TF_KB;
 		entry->total_kb = total;
 
 		if (total == 0) {

@@ -142,7 +142,7 @@ static void mem_print(struct tf_collector * col, FILE * out)
 	struct mem_ctx * ctx = (struct mem_ctx *)col->ctx;
 	if (!ctx) return;
 
-	uint32_t mem_used = ctx->last_mem.mem_total_kb > ctx->last_mem.mem_free_kb ? (ctx->last_mem.mem_total_kb - ctx->last_mem.mem_free_kb) : 0;
+	uint32_t mem_used = ctx->last_mem.mem_total_kb > ctx->last_mem.mem_available_kb ? (ctx->last_mem.mem_total_kb - ctx->last_mem.mem_available_kb) : 0;
 
 	(void)fprintf(out, "MEM : total=%u kB free=%u kB avail=%u kB used=%u kB\n", ctx->last_mem.mem_total_kb, ctx->last_mem.mem_free_kb,
 	              ctx->last_mem.mem_available_kb, mem_used);
