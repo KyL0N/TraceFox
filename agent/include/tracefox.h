@@ -31,8 +31,8 @@
 #define TF_CPU_PAYLOAD_LEN        10
 #define TF_MEM_PAYLOAD_LEN        18
 #define TF_NET_ENTRY_PAYLOAD_LEN  24
-#define TF_DISK_ENTRY_PAYLOAD_LEN 48
-#define TF_FS_ENTRY_PAYLOAD_LEN   24
+#define TF_DISK_ENTRY_PAYLOAD_LEN 66
+#define TF_FS_ENTRY_PAYLOAD_LEN   26
 #define TF_PROC_GROUP_PAYLOAD_LEN 24
 
 /* 发送/文件缓冲与帧头 */
@@ -129,13 +129,13 @@ struct net_entry
 struct disk_entry
 {
 	char name[TF_DISK_NAME_SIZE];
-	/* cumulative counters from /proc/diskstats */
-	uint32_t reads_completed;
-	uint32_t writes_completed;
-	uint32_t sectors_read;
-	uint32_t sectors_written;
-	uint32_t read_ms;
-	uint32_t write_ms;
+	/* cumulative counters from /proc/diskstats (64-bit for long uptime) */
+	uint64_t reads_completed;
+	uint64_t writes_completed;
+	uint64_t sectors_read;
+	uint64_t sectors_written;
+	uint64_t read_ms;
+	uint64_t write_ms;
 	/* per-interval envelope / utilization */
 	uint32_t read_iops_delta;
 	uint32_t write_iops_delta;
@@ -145,7 +145,7 @@ struct disk_entry
 struct fs_entry
 {
 	char mount[TF_FS_MOUNT_SIZE];
-	uint32_t total_kb;
+	uint64_t total_kb;
 	uint16_t used_pct_x10; /* 0.1% precision */
 };
 

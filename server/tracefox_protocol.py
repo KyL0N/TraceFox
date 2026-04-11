@@ -89,53 +89,68 @@ def parse_frame(payload: bytes) -> Dict[str, Any]:
             count = val[0]
             p = 1
             disks = []
+            entry_size = ((length - 1) // count) if count > 0 else 0
             for _ in range(count):
-                if p + 42 > len(val):
-                    break
-                name = val[p : p + 8].split(b"\x00", 1)[0].decode("ascii", "ignore")
-                p += 8
-                fields = struct.unpack(">IIIIIIII", val[p : p + 32])
-                p += 32
-                util_x10 = struct.unpack(">H", val[p : p + 2])[0]
-                p += 2
-                disks.append(
-                    {
+                if entry_size >= 66 and p + 66 <= len(val):
+                    name = val[p : p + 8].split(b"\x00", 1)[0].decode("ascii", "ignore")
+                    p += 8
+                    cum = struct.unpack(">QQQQQQ", val[p : p + 48])
+                    p += 48
+                    delta = struct.unpack(">II", val[p : p + 8])
+                    p += 8
+                    util_x10 = struct.unpack(">H", val[p : p + 2])[0]
+                    p += 2
+                    disks.append({
                         "name": name,
-                        "reads_completed": fields[0],
-                        "writes_completed": fields[1],
-                        "sectors_read": fields[2],
-                        "sectors_written": fields[3],
-                        "read_ms": fields[4],
-                        "write_ms": fields[5],
-                        "read_iops_delta": fields[6],
-                        "write_iops_delta": fields[7],
+                        "reads_completed": cum[0], "writes_completed": cum[1],
+                        "sectors_read": cum[2], "sectors_written": cum[3],
+                        "read_ms": cum[4], "write_ms": cum[5],
+                        "read_iops_delta": delta[0], "write_iops_delta": delta[1],
                         "io_util_pct": util_x10 / 10.0,
-                    }
-                )
+                    })
+                elif p + 42 <= len(val):
+                    name = val[p : p + 8].split(b"\x00", 1)[0].decode("ascii", "ignore")
+                    p += 8
+                    fields = struct.unpack(">IIIIIIII", val[p : p + 32])
+                    p += 32
+                    util_x10 = struct.unpack(">H", val[p : p + 2])[0]
+                    p += 2
+                    disks.append({
+                        "name": name,
+                        "reads_completed": fields[0], "writes_completed": fields[1],
+                        "sectors_read": fields[2], "sectors_written": fields[3],
+                        "read_ms": fields[4], "write_ms": fields[5],
+                        "read_iops_delta": fields[6], "write_iops_delta": fields[7],
+                        "io_util_pct": util_x10 / 10.0,
+                    })
+                else:
+                    break
             result["disk"] = disks
 
         elif t == TF_TYPE_FS and length >= 1:
             count = val[0]
             p = 1
             mounts = []
+            entry_size = ((length - 1) // count) if count > 0 else 0
             for _ in range(count):
-                if p + 22 > len(val):
+                if entry_size >= 26 and p + 26 <= len(val):
+                    name = val[p : p + 16].split(b"\x00", 1)[0].decode("ascii", "ignore")
+                    p += 16
+                    total_kb = struct.unpack(">Q", val[p : p + 8])[0]
+                    p += 8
+                    used_x10 = struct.unpack(">H", val[p : p + 2])[0]
+                    p += 2
+                    mounts.append({"mount": name, "total_kb": total_kb, "used_pct": used_x10 / 10.0})
+                elif p + 22 <= len(val):
+                    name = val[p : p + 16].split(b"\x00", 1)[0].decode("ascii", "ignore")
+                    p += 16
+                    total_kb = struct.unpack(">I", val[p : p + 4])[0]
+                    p += 4
+                    used_x10 = struct.unpack(">H", val[p : p + 2])[0]
+                    p += 2
+                    mounts.append({"mount": name, "total_kb": total_kb, "used_pct": used_x10 / 10.0})
+                else:
                     break
-                name = (
-                    val[p : p + 16].split(b"\x00", 1)[0].decode("ascii", "ignore")
-                )
-                p += 16
-                total_kb = struct.unpack(">I", val[p : p + 4])[0]
-                p += 4
-                used_x10 = struct.unpack(">H", val[p : p + 2])[0]
-                p += 2
-                mounts.append(
-                    {
-                        "mount": name,
-                        "total_kb": total_kb,
-                        "used_pct": used_x10 / 10.0,
-                    }
-                )
             result["fs"] = mounts
 
         elif t == TF_TYPE_PROC and length >= 1:

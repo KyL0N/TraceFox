@@ -151,13 +151,12 @@ static int disk_collect(struct disk_ctx * ctx, const struct agent_config * cfg)
 		unsigned long long diff_writes   = wr_comp - slot->writes;
 		unsigned long long diff_io_ticks = io_ticks - slot->io_ticks;
 
-		/* 累积计数直接抛给 server，方便做长期趋势 */
-		entry->reads_completed  = (uint32_t)rd_comp;
-		entry->writes_completed = (uint32_t)wr_comp;
-		entry->sectors_read     = (uint32_t)rd_sect;
-		entry->sectors_written  = (uint32_t)wr_sect;
-		entry->read_ms          = (uint32_t)rd_ticks;
-		entry->write_ms         = (uint32_t)wr_ticks;
+		entry->reads_completed  = (uint64_t)rd_comp;
+		entry->writes_completed = (uint64_t)wr_comp;
+		entry->sectors_read     = (uint64_t)rd_sect;
+		entry->sectors_written  = (uint64_t)wr_sect;
+		entry->read_ms          = (uint64_t)rd_ticks;
+		entry->write_ms         = (uint64_t)wr_ticks;
 
 		/* 更新缓存 */
 		slot->reads           = rd_comp;
@@ -215,36 +214,41 @@ static int disk_push(struct disk_ctx * ctx, struct tlv_writer * wrt)
 	size_t idx                                                    = 0;
 	struct disk_entry * entry                                     = NULL;
 	char name[TF_DISK_NAME_SIZE]                                  = { 0 };
-	uint32_t vals[TF_DISK_STAT_MIN]                               = { 0 };
 
 	*payload_cursor++ = (uint8_t)ctx->count;
 	for (idx = 0; idx < ctx->count; ++idx) {
 		entry = &ctx->entries[idx];
 		memset(name, 0, sizeof(name));
-		memset(vals, 0, sizeof(vals));
 
 		strncpy(name, entry->name, sizeof(name) - 1);
 
 		memcpy(payload_cursor, name, sizeof(name));
 		payload_cursor += sizeof(name);
 
-		vals[0] = entry->reads_completed;
-		vals[1] = entry->writes_completed;
-		vals[2] = entry->sectors_read;
-		vals[3] = entry->sectors_written;
-		vals[4] = entry->read_ms;
-		vals[5] = entry->write_ms;
-		vals[6] = entry->read_iops_delta;
-		vals[7] = entry->write_iops_delta;
-
-		for (size_t val_idx = 0; val_idx < 8; ++val_idx) {
-			*payload_cursor++ = (uint8_t)((vals[val_idx] >> 24) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((vals[val_idx] >> 16) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)((vals[val_idx] >> 8) & TF_BYTE_MASK);
-			*payload_cursor++ = (uint8_t)(vals[val_idx] & TF_BYTE_MASK);
+		uint64_t cum64[6] = {
+			entry->reads_completed, entry->writes_completed,
+			entry->sectors_read,    entry->sectors_written,
+			entry->read_ms,         entry->write_ms,
+		};
+		for (size_t ci = 0; ci < 6; ++ci) {
+			*payload_cursor++ = (uint8_t)((cum64[ci] >> 56) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)((cum64[ci] >> 48) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)((cum64[ci] >> 40) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)((cum64[ci] >> 32) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)((cum64[ci] >> 24) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)((cum64[ci] >> 16) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)((cum64[ci] >> 8) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)(cum64[ci] & TF_BYTE_MASK);
 		}
 
-		/* io_util_pct_x10 作为 2 字节追加 */
+		uint32_t delta32[2] = { entry->read_iops_delta, entry->write_iops_delta };
+		for (size_t di = 0; di < 2; ++di) {
+			*payload_cursor++ = (uint8_t)((delta32[di] >> 24) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)((delta32[di] >> 16) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)((delta32[di] >> 8) & TF_BYTE_MASK);
+			*payload_cursor++ = (uint8_t)(delta32[di] & TF_BYTE_MASK);
+		}
+
 		*payload_cursor++ = (uint8_t)((entry->io_util_pct_x10 >> 8) & TF_BYTE_MASK);
 		*payload_cursor++ = (uint8_t)(entry->io_util_pct_x10 & TF_BYTE_MASK);
 	}
@@ -273,11 +277,19 @@ static void disk_print(struct tf_collector * col, FILE * out)
 	(void)fprintf(out, "DISK: count=%zu\n", ctx->count);
 	for (size_t i = 0; i < ctx->count; i++) {
 		(void)fprintf(out,
-		              "  - %s: cum(r=%u,w=%u,sr=%u,sw=%u,rm=%u,wm=%u) "
+		              "  - %s: cum(r=%llu,w=%llu,sr=%llu,sw=%llu,rm=%llu,wm=%llu) "
 		              "delta(iops_r=%u,iops_w=%u) util=%u.%1u%%%%\n",
-		              ctx->entries[i].name, ctx->entries[i].reads_completed, ctx->entries[i].writes_completed, ctx->entries[i].sectors_read,
-		              ctx->entries[i].sectors_written, ctx->entries[i].read_ms, ctx->entries[i].write_ms, ctx->entries[i].read_iops_delta,
-		              ctx->entries[i].write_iops_delta, ctx->entries[i].io_util_pct_x10 / TF_PERCENT_DIV, ctx->entries[i].io_util_pct_x10 % TF_PERCENT_DIV);
+		              ctx->entries[i].name,
+		              (unsigned long long)ctx->entries[i].reads_completed,
+		              (unsigned long long)ctx->entries[i].writes_completed,
+		              (unsigned long long)ctx->entries[i].sectors_read,
+		              (unsigned long long)ctx->entries[i].sectors_written,
+		              (unsigned long long)ctx->entries[i].read_ms,
+		              (unsigned long long)ctx->entries[i].write_ms,
+		              ctx->entries[i].read_iops_delta,
+		              ctx->entries[i].write_iops_delta,
+		              ctx->entries[i].io_util_pct_x10 / TF_PERCENT_DIV,
+		              ctx->entries[i].io_util_pct_x10 % TF_PERCENT_DIV);
 	}
 }
 
