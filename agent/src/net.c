@@ -81,7 +81,7 @@ static int net_collect(struct net_ctx *ctx, const struct agent_config *cfg)
 
 	if (idx >= TF_MAX_INTERFACES && fgets(line, sizeof(line), net_dev_fp)) {
 		if (!ctx->truncated) {
-			(void)fprintf(stderr, "[net] interface limit (%d) reached, some interfaces dropped\n", TF_MAX_INTERFACES);
+			TF_LOG_WARN("[net] interface limit (%d) reached, some interfaces dropped", TF_MAX_INTERFACES);
 			ctx->truncated = 1;
 		}
 	}
