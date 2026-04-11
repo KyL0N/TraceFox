@@ -313,10 +313,20 @@ int main(int argc, char **argv)
 
 		for (int i = 0; g_collectors[i] != NULL; i++) {
 			struct tf_collector *col = g_collectors[i];
-			if (col->collect_and_push) {
-				int err = col->collect_and_push(col, &writer, &cfg, &sctx);
+			if (col->collect) {
+				int err = col->collect(col, &cfg, &sctx);
 				if (err != 0) {
-					TF_LOG_ERR("[%s] collect_and_push failed with err: %d", col->name, err);
+					TF_LOG_DBG("[%s] collect failed with err: %d", col->name, err);
+				}
+			}
+		}
+
+		for (int i = 0; g_collectors[i] != NULL; i++) {
+			struct tf_collector *col = g_collectors[i];
+			if (col->push) {
+				int err = col->push(col, &writer);
+				if (err != 0) {
+					TF_LOG_ERR("[%s] push failed with err: %d", col->name, err);
 					push_errors++;
 				}
 			}

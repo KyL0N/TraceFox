@@ -458,17 +458,19 @@ static int proc_push(struct proc_ctx *ctx, struct tlv_writer *wrt)
 	return tlv_put(wrt, TF_TYPE_PROC, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int proc_collect_and_push(struct tf_collector *col, struct tlv_writer *wrt, const struct agent_config *cfg, struct sample_context *sctx)
+static int proc_collect_api(struct tf_collector *col, const struct agent_config *cfg, struct sample_context *sctx)
 {
 	struct proc_ctx *ctx = (struct proc_ctx *)col->ctx;
 	if (!ctx) return -1;
 
 	ctx->cpu_total_diff = sctx ? sctx->cpu_total_diff : 1;
+	return proc_collect(ctx, cfg);
+}
 
-	if (proc_collect(ctx, cfg) != 0) {
-		return -1;
-	}
-
+static int proc_push_api(struct tf_collector *col, struct tlv_writer *wrt)
+{
+	struct proc_ctx *ctx = (struct proc_ctx *)col->ctx;
+	if (!ctx) return -1;
 	return proc_push(ctx, wrt);
 }
 
@@ -490,6 +492,7 @@ struct tf_collector proc_collector = {
 	.ctx              = NULL,
 	.init             = proc_init,
 	.destroy          = proc_destroy,
-	.collect_and_push = proc_collect_and_push,
+	.collect          = proc_collect_api,
+	.push             = proc_push_api,
 	.print            = proc_print,
 };
