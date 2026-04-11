@@ -340,8 +340,8 @@ int main(int argc, char **argv)
 		if (file_mode) {
 			uint16_t frame_len = (uint16_t)writer.len;
 			uint8_t len_bytes[TF_FRAME_LEN_BYTES];
-			len_bytes[0] = (uint8_t)((frame_len >> 8) & TF_BYTE_MASK);
-			len_bytes[1] = (uint8_t)(frame_len & TF_BYTE_MASK);
+			uint8_t *lp = len_bytes;
+			buf_put_be_u16(&lp, frame_len);
 			(void)fwrite(len_bytes, 1, TF_FRAME_LEN_BYTES, log_file);
 			(void)fwrite(buffer, 1, writer.len, log_file);
 			(void)fflush(log_file);

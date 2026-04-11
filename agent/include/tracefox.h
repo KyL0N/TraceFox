@@ -204,6 +204,33 @@ static inline __attribute__((unused)) void config_add_proc_prefix(struct agent_c
 	cfg->proc_prefix_count++;
 }
 
+/* Big-endian serialization helpers for raw payload buffers */
+static inline __attribute__((unused)) void buf_put_be_u16(uint8_t ** cursor, uint16_t val)
+{
+	*(*cursor)++ = (uint8_t)(val >> 8);
+	*(*cursor)++ = (uint8_t)(val);
+}
+
+static inline __attribute__((unused)) void buf_put_be_u32(uint8_t ** cursor, uint32_t val)
+{
+	*(*cursor)++ = (uint8_t)(val >> 24);
+	*(*cursor)++ = (uint8_t)(val >> 16);
+	*(*cursor)++ = (uint8_t)(val >> 8);
+	*(*cursor)++ = (uint8_t)(val);
+}
+
+static inline __attribute__((unused)) void buf_put_be_u64(uint8_t ** cursor, uint64_t val)
+{
+	*(*cursor)++ = (uint8_t)(val >> 56);
+	*(*cursor)++ = (uint8_t)(val >> 48);
+	*(*cursor)++ = (uint8_t)(val >> 40);
+	*(*cursor)++ = (uint8_t)(val >> 32);
+	*(*cursor)++ = (uint8_t)(val >> 24);
+	*(*cursor)++ = (uint8_t)(val >> 16);
+	*(*cursor)++ = (uint8_t)(val >> 8);
+	*(*cursor)++ = (uint8_t)(val);
+}
+
 /* tlv.c */
 int tlv_init(struct tlv_writer * writer, uint8_t * buf, size_t cap, uint32_t timestamp, uint32_t seq);
 int tlv_put(struct tlv_writer * writer, uint8_t type, const void * value, uint8_t len);

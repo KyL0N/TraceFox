@@ -113,13 +113,8 @@ static int net_push(struct net_ctx *ctx, struct tlv_writer *wrt)
 		memcpy(payload_cursor, name, sizeof(name));
 		payload_cursor += sizeof(name);
 
-		for (int shift = 56; shift >= 0; shift -= 8) {
-			*payload_cursor++ = (uint8_t)((entry->rx_bytes >> shift) & TF_BYTE_MASK);
-		}
-
-		for (int shift = 56; shift >= 0; shift -= 8) {
-			*payload_cursor++ = (uint8_t)((entry->tx_bytes >> shift) & TF_BYTE_MASK);
-		}
+		buf_put_be_u64(&payload_cursor, entry->rx_bytes);
+		buf_put_be_u64(&payload_cursor, entry->tx_bytes);
 	}
 
 	return tlv_put(wrt, TF_TYPE_NET, payload, (uint8_t)(payload_cursor - payload));

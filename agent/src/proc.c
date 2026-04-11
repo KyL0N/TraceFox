@@ -450,16 +450,9 @@ static int proc_push(struct proc_ctx *ctx, struct tlv_writer *wrt)
 		memcpy(payload_cursor, group->name, sizeof(group->name));
 		payload_cursor += sizeof(group->name);
 
-		*payload_cursor++ = (uint8_t)((group->inst_count >> 8) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)(group->inst_count & TF_BYTE_MASK);
-
-		*payload_cursor++ = (uint8_t)((group->cpu_pct_x10 >> 8) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)(group->cpu_pct_x10 & TF_BYTE_MASK);
-
-		*payload_cursor++ = (uint8_t)((group->rss_kb_sum >> 24) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)((group->rss_kb_sum >> 16) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)((group->rss_kb_sum >> 8) & TF_BYTE_MASK);
-		*payload_cursor++ = (uint8_t)(group->rss_kb_sum & TF_BYTE_MASK);
+		buf_put_be_u16(&payload_cursor, group->inst_count);
+		buf_put_be_u16(&payload_cursor, group->cpu_pct_x10);
+		buf_put_be_u32(&payload_cursor, group->rss_kb_sum);
 	}
 
 	return tlv_put(wrt, TF_TYPE_PROC, payload, (uint8_t)(payload_cursor - payload));
