@@ -5,12 +5,16 @@ TraceFox Metrics Forwarder
 Receives TLV v2 frames via UDP from tracefox-agent, converts them to
 Prometheus exposition format, and pushes to VictoriaMetrics via HTTP.
 
+Architecture: receive thread -> bounded queue -> sender thread
+This decoupling prevents downstream slowness from blocking UDP ingestion.
+
 Configuration (environment variables):
   TRACEFOX_UDP_HOST    UDP listen address   (default: 0.0.0.0)
   TRACEFOX_UDP_PORT    UDP listen port      (default: 9000)
   TRACEFOX_VM_URL      VictoriaMetrics URL  (default: http://localhost:8428)
   TRACEFOX_HOST_LABEL  Static host label    (default: auto-detect via reverse DNS)
   TRACEFOX_VERBOSE     Enable debug logs    (default: 0)
+  TRACEFOX_QUEUE_SIZE  Max queued frames    (default: 1000)
 
 Usage:
   python3 metrics_forwarder.py
@@ -19,9 +23,11 @@ Usage:
 
 import logging
 import os
+import queue
 import signal
 import socket
 import sys
+import threading
 import time
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -41,6 +47,7 @@ UDP_HOST = os.environ.get("TRACEFOX_UDP_HOST", "0.0.0.0")
 UDP_PORT = int(os.environ.get("TRACEFOX_UDP_PORT", "9000"))
 DEFAULT_HOST = os.environ.get("TRACEFOX_HOST_LABEL", "")
 VERBOSE = os.environ.get("TRACEFOX_VERBOSE", "0") == "1"
+QUEUE_SIZE = int(os.environ.get("TRACEFOX_QUEUE_SIZE", "1000"))
 
 if sys.version_info >= (3, 10):
     from typing import Dict
@@ -50,6 +57,14 @@ else:
 _host_first_seen: Dict[str, int] = {}
 _host_labels: Dict[str, str] = {}
 _running = True
+
+_stats_lock = threading.Lock()
+_stats = {
+    "forwarded": 0,
+    "errors": 0,
+    "drops": 0,
+    "push_failures": 0,
+}
 
 
 def _handle_signal(signum, frame):
@@ -162,24 +177,8 @@ def push_to_vm(body: str) -> bool:
         return False
 
 
-def main() -> None:
-    if VERBOSE:
-        log.setLevel(logging.DEBUG)
-
-    signal.signal(signal.SIGINT, _handle_signal)
-    signal.signal(signal.SIGTERM, _handle_signal)
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(1.0)
-    sock.bind((UDP_HOST, UDP_PORT))
-    log.info("Listening on %s:%d (UDP)", UDP_HOST, UDP_PORT)
-    log.info("Forwarding to VictoriaMetrics at %s", VM_URL)
-    if DEFAULT_HOST:
-        log.info("Static host label: %s", DEFAULT_HOST)
-
-    forwarded = 0
-    errors = 0
-
+def receiver_thread(sock: socket.socket, q: queue.Queue) -> None:
+    """Receive UDP frames, parse, and enqueue (host, body) tuples."""
     while _running:
         try:
             data, addr = sock.recvfrom(2048)
@@ -205,14 +204,92 @@ def main() -> None:
                 body.count("\n"),
             )
 
-        if push_to_vm(body):
-            forwarded += 1
-            if forwarded % 100 == 0:
-                log.info("Forwarded %d frames (%d errors)", forwarded, errors)
-        else:
-            errors += 1
+        try:
+            q.put_nowait(body)
+        except queue.Full:
+            with _stats_lock:
+                _stats["drops"] += 1
+            if _stats["drops"] % 100 == 1:
+                log.warning(
+                    "Queue full (size=%d), dropping frame (total drops=%d)",
+                    QUEUE_SIZE,
+                    _stats["drops"],
+                )
 
-    log.info("Stopped. Forwarded %d frames, %d errors.", forwarded, errors)
+
+def sender_thread(q: queue.Queue) -> None:
+    """Dequeue and push to VictoriaMetrics with exponential backoff on failure."""
+    backoff = 0.0
+    max_backoff = 30.0
+
+    while _running or not q.empty():
+        try:
+            body = q.get(timeout=1.0)
+        except queue.Empty:
+            continue
+
+        if push_to_vm(body):
+            backoff = 0.0
+            with _stats_lock:
+                _stats["forwarded"] += 1
+                if _stats["forwarded"] % 100 == 0:
+                    log.info(
+                        "Forwarded %d frames (%d errors, %d drops, queue=%d)",
+                        _stats["forwarded"],
+                        _stats["errors"],
+                        _stats["drops"],
+                        q.qsize(),
+                    )
+        else:
+            with _stats_lock:
+                _stats["errors"] += 1
+                _stats["push_failures"] += 1
+            if backoff == 0.0:
+                backoff = 0.5
+            else:
+                backoff = min(backoff * 2, max_backoff)
+            log.debug("Push failed, backing off %.1fs", backoff)
+            time.sleep(backoff)
+
+
+def main() -> None:
+    if VERBOSE:
+        log.setLevel(logging.DEBUG)
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(1.0)
+    sock.bind((UDP_HOST, UDP_PORT))
+    log.info("Listening on %s:%d (UDP)", UDP_HOST, UDP_PORT)
+    log.info("Forwarding to VictoriaMetrics at %s", VM_URL)
+    log.info("Queue size: %d", QUEUE_SIZE)
+    if DEFAULT_HOST:
+        log.info("Static host label: %s", DEFAULT_HOST)
+
+    q: queue.Queue = queue.Queue(maxsize=QUEUE_SIZE)
+
+    rx = threading.Thread(target=receiver_thread, args=(sock, q), daemon=True)
+    tx = threading.Thread(target=sender_thread, args=(q,), daemon=True)
+    rx.start()
+    tx.start()
+
+    while _running:
+        try:
+            time.sleep(1.0)
+        except (KeyboardInterrupt, SystemExit):
+            _running = False
+            break
+
+    log.info(
+        "Shutting down. Forwarded %d, errors %d, drops %d.",
+        _stats["forwarded"],
+        _stats["errors"],
+        _stats["drops"],
+    )
+    rx.join(timeout=3.0)
+    tx.join(timeout=5.0)
     sock.close()
 
 
