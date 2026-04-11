@@ -27,7 +27,13 @@ COLLECTOR_LIST
 
 static volatile sig_atomic_t keep_running = 1;
 static bool verbose                       = false;
-static const char * default_cfg_path      = "config/agent.conf";
+
+static const char * const config_search_paths[] = {
+	"config/agent.conf",
+	"agent/config/agent.conf",
+	"/etc/tracefox/agent.conf",
+	NULL,
+};
 
 static void handle_signal(int sig)
 {
@@ -76,7 +82,18 @@ static char * trim_inplace(char * string)
 	return string;
 }
 
-static void load_config_file(const char * path, struct agent_config * cfg)
+static const char * find_config_file(void)
+{
+	for (int i = 0; config_search_paths[i] != NULL; ++i) {
+		if (access(config_search_paths[i], R_OK) == 0) {
+			return config_search_paths[i];
+		}
+	}
+	return NULL;
+}
+
+/* Returns 0 on success, -1 if file cannot be opened. */
+static int load_config_file(const char * path, struct agent_config * cfg)
 {
 	FILE * config_fp             = NULL;
 	char line[TF_LINE_BUF_SMALL] = {0};
@@ -84,7 +101,7 @@ static void load_config_file(const char * path, struct agent_config * cfg)
 
 	config_fp = fopen(path, "r");
 	if (!config_fp) {
-		return;
+		return -1;
 	}
 
 	while (fgets(line, sizeof(line), config_fp) != NULL) {
@@ -152,28 +169,46 @@ static void load_config_file(const char * path, struct agent_config * cfg)
 	}
 
 	(void)fclose(config_fp);
+	return 0;
+}
+
+static void print_effective_config(const struct agent_config * cfg)
+{
+	(void)fprintf(stderr, "[config] effective: server_host=%s server_port=%u interval=%u\n",
+	              cfg->server_host, (unsigned)cfg->server_port, (unsigned)cfg->interval_sec);
 }
 
 static void config_init_from_sources(int argc, char ** argv, struct agent_config * cfg)
 {
-	const char * selected_path = default_cfg_path;
+	const char * explicit_path = NULL;
 
-	/* 先设置默认值 */
 	config_defaults(cfg);
 
-	/*
-	 * 这里只做一次“手工”扫描 argv 来寻找 -c 配置文件参数，
-	 * 避免使用 getopt 破坏后面真正参数解析的全局状态
-	 *（此前的实现会调用 getopt 两次，导致后续 -h/-p/-i 被错位解析）。
-	 */
+	/* Scan argv for -c before getopt to avoid disturbing global optind state */
 	for (int i = 1; i < argc - 1; ++i) {
 		if (strcmp(argv[i], "-c") == 0 && argv[i + 1] != NULL && argv[i + 1][0] != '\0') {
-			selected_path = argv[i + 1];
+			explicit_path = argv[i + 1];
 			break;
 		}
 	}
 
-	load_config_file(selected_path, cfg);
+	if (explicit_path) {
+		if (load_config_file(explicit_path, cfg) != 0) {
+			(void)fprintf(stderr, "[config] fatal: cannot open '%s': %s\n", explicit_path, strerror(errno));
+			exit(1);
+		}
+		(void)fprintf(stderr, "[config] loaded: %s\n", explicit_path);
+	}
+	else {
+		const char * found = find_config_file();
+		if (found) {
+			(void)load_config_file(found, cfg);
+			(void)fprintf(stderr, "[config] loaded: %s\n", found);
+		}
+		else {
+			(void)fprintf(stderr, "[config] no config file found, using defaults\n");
+		}
+	}
 }
 
 int main(int argc, char ** argv)
@@ -202,7 +237,6 @@ int main(int argc, char ** argv)
 	while ((opt = getopt(argc, argv, "c:h:p:i:f:P:v")) != -1) {
 		switch (opt) {
 		case 'c':
-			/* 配置文件已在初始化阶段读取，命令行第二次解析时仅消费该参数 */
 			break;
 		case 'h': (void)strncpy(cfg.server_host, optarg, sizeof(cfg.server_host) - 1); break;
 		case 'p': cfg.server_port = (uint16_t)strtol(optarg, NULL, 10); break;
@@ -233,6 +267,10 @@ int main(int argc, char ** argv)
 		}
 	}
 
+	if (verbose) {
+		print_effective_config(&cfg);
+	}
+
 	(void)signal(SIGINT, handle_signal);
 	(void)signal(SIGTERM, handle_signal);
 
@@ -242,7 +280,6 @@ int main(int argc, char ** argv)
 			perror("fopen");
 			return 1;
 		}
-		/* 新文件时写入帧头：用 ftell 判断是否为空 */
 		(void)fseek(log_file, 0, SEEK_END);
 		if (ftell(log_file) == 0) {
 			char header[TF_HEADER_LEN] = {'T', 'F', 'O', 'X', TF_HEADER_VER, 0x00, 0x00, 0x00};
@@ -294,13 +331,11 @@ int main(int argc, char ** argv)
 		}
 
 		if (file_mode) {
-			/* 帧长 2 字节大端 */
 			uint16_t frame_len = (uint16_t)writer.len;
 			uint8_t len_bytes[TF_FRAME_LEN_BYTES];
 			len_bytes[0] = (uint8_t)((frame_len >> 8) & TF_BYTE_MASK);
 			len_bytes[1] = (uint8_t)(frame_len & TF_BYTE_MASK);
 			(void)fwrite(len_bytes, 1, TF_FRAME_LEN_BYTES, log_file);
-			// Write TLV data
 			(void)fwrite(buffer, 1, writer.len, log_file);
 			(void)fflush(log_file);
 		}
