@@ -42,42 +42,18 @@ struct proc_ctx
 	struct proc_payload last_payload;
 };
 
-/* Provide global functions temporarily for config parsing */
-static struct proc_ctx * g_default_proc_ctx = NULL;
-
-void proc_add_comm_prefix(const char * prefix)
+static void apply_config_prefixes(struct proc_ctx * ctx, const struct agent_config * cfg)
 {
-	if (!g_default_proc_ctx) return;
-	struct proc_ctx * ctx = g_default_proc_ctx;
+	for (size_t i = 0; i < cfg->proc_prefix_count && i < MAX_COMM_PREFIX; ++i) {
+		strncpy(ctx->comm_prefix_list[i], cfg->proc_prefixes[i], COMM_PREFIX_LEN - 1);
+		ctx->comm_prefix_list[i][COMM_PREFIX_LEN - 1] = '\0';
 
-	if (!prefix || !prefix[0]) {
-		return;
+		strncpy(ctx->watch_groups[i].name, cfg->proc_prefixes[i], COMM_PREFIX_LEN - 1);
+		ctx->watch_groups[i].name[COMM_PREFIX_LEN - 1] = '\0';
+		ctx->watch_groups[i].list.count                = 0;
 	}
-
-	if (ctx->comm_prefix_count >= MAX_COMM_PREFIX) {
-		return;
-	}
-
-	strncpy(ctx->comm_prefix_list[ctx->comm_prefix_count], prefix, COMM_PREFIX_LEN - 1);
-	ctx->comm_prefix_list[ctx->comm_prefix_count][COMM_PREFIX_LEN - 1] = '\0';
-
-	/* 同步初始化 tracker 分组 */
-	strncpy(ctx->watch_groups[ctx->comm_prefix_count].name, prefix, COMM_PREFIX_LEN - 1);
-	ctx->watch_groups[ctx->comm_prefix_count].name[COMM_PREFIX_LEN - 1] = '\0';
-	ctx->watch_groups[ctx->comm_prefix_count].list.count                = 0;
-
-	ctx->comm_prefix_count++;
-	ctx->watch_group_count = ctx->comm_prefix_count;
-}
-
-void proc_clear_comm_prefixes(void)
-{
-	if (!g_default_proc_ctx) return;
-	struct proc_ctx * ctx = g_default_proc_ctx;
-
-	ctx->comm_prefix_count = 0;
-	ctx->watch_group_count = 0;
-	memset(ctx->watch_groups, 0, sizeof(ctx->watch_groups));
+	ctx->comm_prefix_count = cfg->proc_prefix_count;
+	ctx->watch_group_count = cfg->proc_prefix_count;
 }
 
 static int comm_prefix_match(struct proc_ctx * ctx, const char * comm)
@@ -340,17 +316,13 @@ static void tracker_scan_proc(struct proc_ctx * ctx)
 
 static int proc_init(struct tf_collector * col, const struct agent_config * cfg)
 {
-	(void)cfg;
 	struct proc_ctx * ctx = calloc(1, sizeof(*ctx));
 	if (!ctx) {
 		return -1;
 	}
 	col->ctx = ctx;
 
-	/* Initialize the global pointer used for early config parsing */
-	if (!g_default_proc_ctx) {
-		g_default_proc_ctx = ctx;
-	}
+	apply_config_prefixes(ctx, cfg);
 
 	return 0;
 }
@@ -358,9 +330,6 @@ static int proc_init(struct tf_collector * col, const struct agent_config * cfg)
 static void proc_destroy(struct tf_collector * col)
 {
 	if (col && col->ctx) {
-		if (g_default_proc_ctx == col->ctx) {
-			g_default_proc_ctx = NULL;
-		}
 		free(col->ctx);
 		col->ctx = NULL;
 	}
