@@ -19,13 +19,7 @@ struct cpu_ctx
 	struct cpu_payload last_payload;
 };
 
-/* We still need to export this for proc.c as a global state across collector boundaries for now. */
 static unsigned long long g_last_diff_total = 1;
-
-unsigned long long cpu_total_diff(void)
-{
-	return g_last_diff_total ? g_last_diff_total : 1;
-}
 
 static int cpu_init(struct tf_collector * col, const struct agent_config * cfg)
 {
@@ -142,13 +136,17 @@ static int cpu_push(struct cpu_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_CPU, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int cpu_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg)
+static int cpu_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
 {
 	struct cpu_ctx * ctx = (struct cpu_ctx *)col->ctx;
 	if (!ctx) return -1;
 
 	if (cpu_collect(ctx, cfg) != 0) {
 		return -1;
+	}
+
+	if (sctx) {
+		sctx->cpu_total_diff = g_last_diff_total ? g_last_diff_total : 1;
 	}
 
 	return cpu_push(ctx, wrt);

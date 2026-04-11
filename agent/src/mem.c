@@ -124,8 +124,9 @@ static int mem_push(struct mem_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_MEM, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int mem_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg)
+static int mem_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
 {
+	(void)sctx;
 	struct mem_ctx * ctx = (struct mem_ctx *)col->ctx;
 	if (!ctx) return -1;
 

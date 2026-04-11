@@ -39,6 +39,7 @@ struct proc_ctx
 	size_t comm_prefix_count;
 	size_t watch_group_count;
 	time_t last_scan_time;
+	unsigned long long cpu_total_diff;
 	struct proc_payload last_payload;
 };
 
@@ -348,7 +349,7 @@ static int proc_collect(struct proc_ctx * ctx, const struct agent_config * cfg)
 		tracker_scan_proc(ctx);
 	}
 
-	unsigned long long total_diff = cpu_total_diff();
+	unsigned long long total_diff = ctx->cpu_total_diff;
 	if (total_diff == 0) {
 		total_diff = 1;
 	}
@@ -461,10 +462,12 @@ static int proc_push(struct proc_ctx * ctx, struct tlv_writer * wrt)
 	return tlv_put(wrt, TF_TYPE_PROC, payload, (uint8_t)(payload_cursor - payload));
 }
 
-static int proc_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg)
+static int proc_collect_and_push(struct tf_collector * col, struct tlv_writer * wrt, const struct agent_config * cfg, struct sample_context * sctx)
 {
 	struct proc_ctx * ctx = (struct proc_ctx *)col->ctx;
 	if (!ctx) return -1;
+
+	ctx->cpu_total_diff = sctx ? sctx->cpu_total_diff : 1;
 
 	if (proc_collect(ctx, cfg) != 0) {
 		return -1;
