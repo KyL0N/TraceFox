@@ -73,7 +73,7 @@ static int fs_collect(struct fs_ctx *ctx, const struct agent_config *cfg)
 
 		struct fs_entry *entry = &ctx->entries[idx++];
 		memset(entry, 0, sizeof(*entry));
-		strncpy(entry->mount, mount, sizeof(entry->mount) - 1);
+		strncpy(entry->mount, dev, sizeof(entry->mount) - 1);
 		entry->mount[sizeof(entry->mount) - 1] = '\0';
 
 		uint64_t total  = (uint64_t)svfs.f_blocks * svfs.f_frsize / (uint64_t)TF_KB;

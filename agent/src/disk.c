@@ -36,7 +36,7 @@ static int is_partition_name(const char *name)
 		return 0;
 	}
 
-	if (strncmp(name, "loop", 4) == 0 || strncmp(name, "ram", 3) == 0 || strncmp(name, "dm-", 3) == 0) {
+	if (strncmp(name, "loop", 4) == 0 || strncmp(name, "ram", 3) == 0 || strncmp(name, "dm-", 3) == 0 || strncmp(name, "zram", 4) == 0) {
 		return 1;
 	}
 
