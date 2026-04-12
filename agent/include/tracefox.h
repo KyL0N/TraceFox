@@ -9,8 +9,8 @@
 #define TF_MAGIC           0x5446
 #define TF_VERSION         2
 #define TF_MAX_INTERFACES  4
-#define TF_MAX_DISKS       4
-#define TF_MAX_FS          4
+#define TF_MAX_DISKS       16
+#define TF_MAX_FS          16
 #define TF_MAX_PROC        10
 #define TF_PROC_TRACK      64
 #define TF_MAX_PROC_GROUPS 8
@@ -62,11 +62,11 @@
 #define TF_NET_IFACE_BUF        16
 #define TF_NET_IFACE_SCANF      15
 #define TF_NET_DEV_SSCANF_FMT   " %15[^:]: %llu %*u %*u %*u %*u %*u %*u %*u %llu"
-#define TF_FS_DEV_BUF           64
+#define TF_FS_DEV_BUF           16
 #define TF_FS_MOUNT_BUF         128
 #define TF_FS_TYPE_BUF          32
 #define TF_FS_OPTS_BUF          128
-#define TF_FSCANF_MOUNTS_FMT    "%63s %127s %31s %127s %d %d"
+#define TF_FSCANF_MOUNTS_FMT    "%15s %127s %31s %127s %d %d"
 #define TF_DISK_STAT_MIN        14
 #define TF_DISK_CACHE_NAME_LEN  16
 #define TF_DISK_SSCANF_FMT      "%u %u %31s %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu"
@@ -89,8 +89,7 @@
 #define TF_COMM_PREFIX_LEN 32
 
 /* Log levels (lower value = higher severity) */
-enum tf_log_level
-{
+enum tf_log_level {
 	TF_LOG_LVL_ERR  = 0,
 	TF_LOG_LVL_WARN = 1,
 	TF_LOG_LVL_INFO = 2,
@@ -99,28 +98,24 @@ enum tf_log_level
 
 extern enum tf_log_level g_tf_log_level;
 
-#define TF_LOG_ERR(fmt, ...)                                                                        \
-	do {                                                                                        \
-		if (TF_LOG_LVL_ERR <= g_tf_log_level)                                               \
-			(void)fprintf(stderr, "[ERR]  " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);       \
+#define TF_LOG_ERR(fmt, ...)                                                                                                                                   \
+	do {                                                                                                                                                       \
+		if (TF_LOG_LVL_ERR <= g_tf_log_level) (void)fprintf(stderr, "[ERR]  " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);                                            \
 	} while (0)
 
-#define TF_LOG_WARN(fmt, ...)                                                                       \
-	do {                                                                                        \
-		if (TF_LOG_LVL_WARN <= g_tf_log_level)                                              \
-			(void)fprintf(stderr, "[WARN] " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);       \
+#define TF_LOG_WARN(fmt, ...)                                                                                                                                  \
+	do {                                                                                                                                                       \
+		if (TF_LOG_LVL_WARN <= g_tf_log_level) (void)fprintf(stderr, "[WARN] " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);                                           \
 	} while (0)
 
-#define TF_LOG_INFO(fmt, ...)                                                                       \
-	do {                                                                                        \
-		if (TF_LOG_LVL_INFO <= g_tf_log_level)                                              \
-			(void)fprintf(stderr, "[INFO] " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);       \
+#define TF_LOG_INFO(fmt, ...)                                                                                                                                  \
+	do {                                                                                                                                                       \
+		if (TF_LOG_LVL_INFO <= g_tf_log_level) (void)fprintf(stderr, "[INFO] " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);                                           \
 	} while (0)
 
-#define TF_LOG_DBG(fmt, ...)                                                                        \
-	do {                                                                                        \
-		if (TF_LOG_LVL_DBG <= g_tf_log_level)                                               \
-			(void)fprintf(stderr, "[DBG]  " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);       \
+#define TF_LOG_DBG(fmt, ...)                                                                                                                                   \
+	do {                                                                                                                                                       \
+		if (TF_LOG_LVL_DBG <= g_tf_log_level) (void)fprintf(stderr, "[DBG]  " fmt "\n" __VA_OPT__(, ) __VA_ARGS__);                                            \
 	} while (0)
 
 struct agent_config
@@ -202,7 +197,7 @@ struct proc_payload
 
 struct tlv_writer
 {
-	uint8_t * buffer;
+	uint8_t *buffer;
 	size_t len;
 	size_t cap;
 };
@@ -214,23 +209,23 @@ struct sample_context
 
 struct tf_collector
 {
-	const char * name;
-	void * ctx; /* 状态隔离：每个收集器独占的内部状态 */
+	const char *name;
+	void *ctx; /* 状态隔离：每个收集器独占的内部状态 */
 
 	/* 生命周期与初始化 */
-	int (*init)(struct tf_collector * col, const struct agent_config * cfg);
-	void (*destroy)(struct tf_collector * col);
+	int (*init)(struct tf_collector *col, const struct agent_config *cfg);
+	void (*destroy)(struct tf_collector *col);
 
 	/* 解耦架构：分离采集计算与网络打包 */
-	int (*collect)(struct tf_collector * col, const struct agent_config * cfg, struct sample_context * sctx);
-	int (*push)(struct tf_collector * col, struct tlv_writer * wrt);
+	int (*collect)(struct tf_collector *col, const struct agent_config *cfg, struct sample_context *sctx);
+	int (*push)(struct tf_collector *col, struct tlv_writer *wrt);
 
 	/* 打印调试信息，传入 FILE * 便于重定向 */
-	void (*print)(struct tf_collector * col, FILE * out);
+	void (*print)(struct tf_collector *col, FILE *out);
 };
 
 /* config helper: add a proc prefix to agent_config */
-static inline __attribute__((unused)) void config_add_proc_prefix(struct agent_config * cfg, const char * prefix)
+static inline __attribute__((unused)) void config_add_proc_prefix(struct agent_config *cfg, const char *prefix)
 {
 	if (cfg->proc_prefix_count >= TF_MAX_COMM_PREFIX) {
 		return;
@@ -241,13 +236,13 @@ static inline __attribute__((unused)) void config_add_proc_prefix(struct agent_c
 }
 
 /* Big-endian serialization helpers for raw payload buffers */
-static inline __attribute__((unused)) void buf_put_be_u16(uint8_t ** cursor, uint16_t val)
+static inline __attribute__((unused)) void buf_put_be_u16(uint8_t **cursor, uint16_t val)
 {
 	*(*cursor)++ = (uint8_t)(val >> 8);
 	*(*cursor)++ = (uint8_t)(val);
 }
 
-static inline __attribute__((unused)) void buf_put_be_u32(uint8_t ** cursor, uint32_t val)
+static inline __attribute__((unused)) void buf_put_be_u32(uint8_t **cursor, uint32_t val)
 {
 	*(*cursor)++ = (uint8_t)(val >> 24);
 	*(*cursor)++ = (uint8_t)(val >> 16);
@@ -255,7 +250,7 @@ static inline __attribute__((unused)) void buf_put_be_u32(uint8_t ** cursor, uin
 	*(*cursor)++ = (uint8_t)(val);
 }
 
-static inline __attribute__((unused)) void buf_put_be_u64(uint8_t ** cursor, uint64_t val)
+static inline __attribute__((unused)) void buf_put_be_u64(uint8_t **cursor, uint64_t val)
 {
 	*(*cursor)++ = (uint8_t)(val >> 56);
 	*(*cursor)++ = (uint8_t)(val >> 48);
@@ -268,7 +263,7 @@ static inline __attribute__((unused)) void buf_put_be_u64(uint8_t ** cursor, uin
 }
 
 /* tlv.c */
-int tlv_init(struct tlv_writer * writer, uint8_t * buf, size_t cap, uint32_t timestamp, uint32_t seq);
-int tlv_put(struct tlv_writer * writer, uint8_t type, const void * value, uint8_t len);
+int tlv_init(struct tlv_writer *writer, uint8_t *buf, size_t cap, uint32_t timestamp, uint32_t seq);
+int tlv_put(struct tlv_writer *writer, uint8_t type, const void *value, uint8_t len);
 
 #endif

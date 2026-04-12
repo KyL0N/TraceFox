@@ -143,7 +143,7 @@ def test_fs_tlv_64bit():
     assert len(result["fs"]) == 1
     assert result["fs"][0]["mount"] == "/"
     assert result["fs"][0]["total_kb"] == 5_000_000_000
-    assert result["fs"][0]["used_pct"] == 72.3
+    assert result["fs"][0]["used_pct"] == 723
 
 
 def test_fs_tlv_32bit_compat():
@@ -155,7 +155,7 @@ def test_fs_tlv_32bit_compat():
     result = parse_frame(frame)
     assert len(result["fs"]) == 1
     assert result["fs"][0]["total_kb"] == 1000000
-    assert result["fs"][0]["used_pct"] == 50.0
+    assert result["fs"][0]["used_pct"] == 500
 
 
 def test_proc_tlv():
