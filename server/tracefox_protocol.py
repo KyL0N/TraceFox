@@ -150,7 +150,7 @@ def _parse_tlv_entries(
                     p += 8
                     used_x10 = struct.unpack(">H", val[p : p + 2])[0]
                     p += 2
-                    mounts.append({"mount": name, "total_kb": total_kb, "used_pct": used_x10 / 10.0})
+                    mounts.append({"mount": name, "total_kb": total_kb, "used_pct": used_x10})
                 elif p + 22 <= len(val):
                     name = val[p : p + 16].split(b"\x00", 1)[0].decode("ascii", "ignore")
                     p += 16
@@ -158,7 +158,7 @@ def _parse_tlv_entries(
                     p += 4
                     used_x10 = struct.unpack(">H", val[p : p + 2])[0]
                     p += 2
-                    mounts.append({"mount": name, "total_kb": total_kb, "used_pct": used_x10 / 10.0})
+                    mounts.append({"mount": name, "total_kb": total_kb, "used_pct": used_x10})
                 else:
                     break
             result["fs"] = mounts
