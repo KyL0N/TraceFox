@@ -153,9 +153,12 @@ def frame_to_prometheus(frame: dict, host: str) -> str:
         emit("tracefox_disk_write_iops", dl, d["write_iops_delta"])
         emit("tracefox_disk_io_util_pct", dl, d["io_util_pct"])
 
+    log.debug("fs: %s", frame.get("fs", []))
     for fs in frame.get("fs", []):
         fl = {**hl, "mount": fs["mount"]}
         emit("tracefox_fs_total_kb", fl, fs["total_kb"])
+        log.debug("fs_total_kb: %s", fs["total_kb"])
+        log.debug("fs_used_pct: %s", fs["used_pct"])
         emit("tracefox_fs_used_pct", fl, fs["used_pct"])
 
     for pg in frame.get("proc_groups", []):
@@ -187,6 +190,7 @@ def push_to_vm(body: str) -> bool:
 
 def receiver_thread(sock: socket.socket, q: queue.Queue) -> None:
     """Receive UDP frames, parse, and enqueue (host, body) tuples."""
+    global _running
     while _running:
         try:
             data, addr = sock.recvfrom(2048)
@@ -202,6 +206,8 @@ def receiver_thread(sock: socket.socket, q: queue.Queue) -> None:
 
         host = resolve_host_label(addr)
         body = frame_to_prometheus(frame, host)
+
+        log.debug("Ignoring invalid frame from %s:%d", *addr)
 
         if VERBOSE:
             log.debug(
@@ -227,6 +233,7 @@ def receiver_thread(sock: socket.socket, q: queue.Queue) -> None:
 
 def sender_thread(q: queue.Queue) -> None:
     """Dequeue and push to VictoriaMetrics with exponential backoff on failure."""
+    global _running
     backoff = 0.0
     max_backoff = 30.0
 
@@ -261,6 +268,7 @@ def sender_thread(q: queue.Queue) -> None:
 
 
 def main() -> None:
+    global _running
     if VERBOSE:
         log.setLevel(logging.DEBUG)
 
