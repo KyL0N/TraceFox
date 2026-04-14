@@ -1,7 +1,7 @@
 """
 TraceFox TLV v2 frame parser.
 
-Shared by metrics_forwarder.py, data_server.py, and test_server.py.
+Shared by metrics_forwarder.py and test_server.py.
 """
 
 import struct
