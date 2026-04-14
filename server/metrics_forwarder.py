@@ -204,8 +204,6 @@ def receiver_thread(sock: socket.socket, q: queue.Queue) -> None:
         host = resolve_host_label(addr)
         body = frame_to_prometheus(frame, host)
 
-        log.debug("Ignoring invalid frame from %s:%d", *addr)
-
         if VERBOSE:
             log.debug(
                 "seq=%d host=%s bytes=%d metrics=%d",

@@ -214,7 +214,7 @@ python3 test_server.py              # 终端打印解析后的帧
 - 所有服务使用 `network_mode: host`，直接使用宿主机网络
 - VictoriaMetrics 监听 `:8428`，Grafana 监听 `:3000`，Forwarder 监听 UDP `:9000`
 - **安全建议**：生产环境部署前务必修改 `.env` 中的 `GRAFANA_PASSWORD`
-- 镜像版本已固定（VictoriaMetrics `v1.106.1`、Grafana `11.4.0`），避免 `:latest` 带来的不可预期升级
+- 镜像版本已固定（VictoriaMetrics `v1.106.1`、Grafana `12.4.0`），避免 `:latest` 带来的不可预期升级
 - Grafana 匿名访问默认关闭，需登录后使用
 - 磁盘累计计数器使用 64 位，支持长时间运行和大容量设备
 - 文件系统使用率基于 `f_bavail`（普通用户可用空间），与 `df` 一致
