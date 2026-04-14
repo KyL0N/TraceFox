@@ -50,6 +50,10 @@ ifeq ($(SANITIZE),1)
 	LDFLAGS := $(filter-out -static-pie,$(LDFLAGS))
 endif
 
+ifneq ($(filter -static-pie,$(LDFLAGS)),)
+	CFLAGS += -DTF_STATIC_BUILD=1
+endif
+
 LIBS    = 
 
 # -----------------------------

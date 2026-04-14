@@ -6,7 +6,9 @@
 #include <errno.h>
 #include <ctype.h>
 #include <arpa/inet.h>
+#if !(defined(TF_STATIC_BUILD) && defined(__GLIBC__))
 #include <netdb.h>
+#endif
 #include <time.h>
 #include "tracefox.h"
 
@@ -70,15 +72,48 @@ static int is_ascii_safe(const char *value)
 
 static int resolve_addr(const char *host, uint16_t port, struct sockaddr_storage *addr, socklen_t *addr_len, int *family)
 {
+#if defined(TF_STATIC_BUILD) && defined(__GLIBC__)
+	struct in_addr ipv4_addr = { 0 };
+	struct in6_addr ipv6_addr = { 0 };
+#else
 	char port_buf[6]         = { 0 };
 	struct addrinfo hints    = { 0 };
 	struct addrinfo *results = NULL;
 	struct addrinfo *cursor  = NULL;
+#endif
 
 	if (!host || !addr || !addr_len || !family) {
 		return -1;
 	}
 
+#if defined(TF_STATIC_BUILD) && defined(__GLIBC__)
+	if (inet_pton(AF_INET, host, &ipv4_addr) == 1) {
+		struct sockaddr_in *addr4 = (struct sockaddr_in *)addr;
+
+		memset(addr, 0, sizeof(*addr));
+		addr4->sin_family = AF_INET;
+		addr4->sin_port   = htons(port);
+		addr4->sin_addr   = ipv4_addr;
+		*addr_len         = (socklen_t)sizeof(*addr4);
+		*family           = AF_INET;
+		return 0;
+	}
+
+	if (inet_pton(AF_INET6, host, &ipv6_addr) == 1) {
+		struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)addr;
+
+		memset(addr, 0, sizeof(*addr));
+		addr6->sin6_family = AF_INET6;
+		addr6->sin6_port   = htons(port);
+		addr6->sin6_addr   = ipv6_addr;
+		*addr_len          = (socklen_t)sizeof(*addr6);
+		*family            = AF_INET6;
+		return 0;
+	}
+
+	TF_LOG_ERR("server_host '%s' must be a numeric IPv4/IPv6 literal in static glibc builds", host);
+	return -1;
+#else
 	(void)snprintf(port_buf, sizeof(port_buf), "%u", (unsigned)port);
 
 	hints.ai_family   = AF_UNSPEC;
@@ -106,6 +141,7 @@ static int resolve_addr(const char *host, uint16_t port, struct sockaddr_storage
 
 	freeaddrinfo(results);
 	return -1;
+#endif
 }
 
 static char *trim_inplace(char *string)
