@@ -27,6 +27,7 @@
 #define TF_DISK_NAME_SIZE 8
 #define TF_FS_MOUNT_SIZE  16
 #define TF_PROC_NAME_SIZE 16
+#define TF_HOST_LABEL_SIZE 64
 
 /* 各 TLV payload 长度（字节） */
 #define TF_CPU_PAYLOAD_LEN        10
@@ -78,12 +79,13 @@
 #define TF_FSCANF_STATUS_FMT    "%63s %lu %15s"
 #define TF_FSCANF_MEMINFO_FMT   "%63s %lu"
 
-#define TF_TYPE_CPU  0x01
-#define TF_TYPE_MEM  0x02
-#define TF_TYPE_NET  0x04
-#define TF_TYPE_DISK 0x05
-#define TF_TYPE_FS   0x06
-#define TF_TYPE_PROC 0x07
+#define TF_TYPE_CPU        0x01
+#define TF_TYPE_MEM        0x02
+#define TF_TYPE_HOST_LABEL 0x03
+#define TF_TYPE_NET        0x04
+#define TF_TYPE_DISK       0x05
+#define TF_TYPE_FS         0x06
+#define TF_TYPE_PROC       0x07
 
 #define TF_MAX_COMM_PREFIX 32
 #define TF_COMM_PREFIX_LEN 32
@@ -123,6 +125,7 @@ struct agent_config
 	char server_host[64];
 	uint16_t server_port;
 	uint16_t interval_sec;
+	char host_label[TF_HOST_LABEL_SIZE];
 	char proc_prefixes[TF_MAX_COMM_PREFIX][TF_COMM_PREFIX_LEN];
 	size_t proc_prefix_count;
 };

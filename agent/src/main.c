@@ -53,6 +53,21 @@ static void config_defaults(struct agent_config *cfg)
 	cfg->interval_sec = TF_DEFAULT_INTERVAL_SEC;
 }
 
+static int is_ascii_safe(const char *value)
+{
+	if (!value) {
+		return 0;
+	}
+
+	for (const unsigned char *cursor = (const unsigned char *)value; *cursor != '\0'; ++cursor) {
+		if (*cursor < 0x20U || *cursor > 0x7EU) {
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
 static int resolve_addr(const char *host, uint16_t port, struct sockaddr_in *addr)
 {
 	memset(addr, 0, sizeof(*addr));
@@ -156,6 +171,18 @@ static int load_config_file(const char *path, struct agent_config *cfg)
 				TF_LOG_DBG("[config] invalid interval at line %u: %s", line_no, val);
 			}
 		}
+		else if (strcmp(key, "host_label") == 0) {
+			if (*val == '\0') {
+				cfg->host_label[0] = '\0';
+			}
+			else if (!is_ascii_safe(val)) {
+				TF_LOG_WARN("[config] invalid host_label at line %u: ASCII printable characters only", line_no);
+			}
+			else {
+				(void)strncpy(cfg->host_label, val, sizeof(cfg->host_label) - 1);
+				cfg->host_label[sizeof(cfg->host_label) - 1] = '\0';
+			}
+		}
 		else if (strcmp(key, "proc_prefix") == 0) {
 			char *saveptr = NULL;
 			char *prefix  = strtok_r(val, ",", &saveptr);
@@ -176,8 +203,8 @@ static int load_config_file(const char *path, struct agent_config *cfg)
 
 static void print_effective_config(const struct agent_config *cfg)
 {
-	TF_LOG_DBG("[config] effective: server_host=%s server_port=%u interval=%u", cfg->server_host, (unsigned)cfg->server_port,
-	           (unsigned)cfg->interval_sec);
+	TF_LOG_DBG("[config] effective: server_host=%s server_port=%u interval=%u host_label=%s", cfg->server_host,
+	           (unsigned)cfg->server_port, (unsigned)cfg->interval_sec, cfg->host_label[0] != '\0' ? cfg->host_label : "<unset>");
 }
 
 static void config_init_from_sources(int argc, char **argv, struct agent_config *cfg)
@@ -343,6 +370,17 @@ int main(int argc, char **argv)
 
 		if (tlv_init(&writer, buffer, sizeof(buffer), timestamp, seq++) != 0) {
 			break;
+		}
+
+		if (cfg.host_label[0] != '\0') {
+			size_t host_label_len = strnlen(cfg.host_label, sizeof(cfg.host_label));
+			if (host_label_len > (size_t)UINT8_MAX) {
+				host_label_len = (size_t)UINT8_MAX;
+			}
+
+			if (tlv_put(&writer, TF_TYPE_HOST_LABEL, cfg.host_label, (uint8_t)host_label_len) != 0) {
+				TF_LOG_WARN("[host] failed to append host label TLV");
+			}
 		}
 
 		unsigned long push_errors  = 0;
