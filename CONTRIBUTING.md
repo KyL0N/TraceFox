@@ -33,6 +33,12 @@ We welcome contributions from anyone, whether it's bug reports, feature requests
 - Maintain backward compatibility in the `tracefox_protocol.py` parser.
 
 ## Code of Conduct
-Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by the terms in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## Security Reports
+Please report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
+
+## Maintainers
+Project ownership and contact details are listed in [MAINTAINERS.md](MAINTAINERS.md).
 
 Thank you for making TraceFox better!
