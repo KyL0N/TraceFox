@@ -93,7 +93,7 @@ make debug              # 调试构建（含 -g -O0）
 ### 2. 部署服务端（Docker Compose）
 
 ```bash
-cp .env.example .env    # 编辑 TRACEFOX_HOST_LABEL、GRAFANA_PASSWORD 等
+cp .env.example .env    # 编辑 GRAFANA_PASSWORD 等
 sudo docker compose up -d
 ```
 
@@ -106,6 +106,14 @@ sudo docker compose up -d
 
 ```bash
 ./agent/bin/tracefox-agent -h <服务端IP> -p 9000 -i 5
+```
+
+在 agent 配置文件中设置主机标识：
+
+```ini
+# agent/config/agent.conf
+host_label=sunrise
+proc_prefix=node,iperf3
 ```
 
 | 参数 | 说明 | 默认值 |
@@ -124,6 +132,8 @@ Agent 启动时按以下路径搜索配置文件：`config/agent.conf` → `agen
 3. 内置默认值（最低）
 
 启动时会打印实际加载的配置路径；`-v` 模式下打印所有生效值。
+
+`host` 指标标签由 agent 侧 `host_label` 提供。forwarder 不再尝试通过容器网络、反向 DNS 或环境变量推断真实主机身份。若 agent 未配置 `host_label`，forwarder 只会回退到源 IP 字面值，用于兼容旧 agent 和调试场景。
 
 ### 4. 查看大盘
 
@@ -164,7 +174,7 @@ python3 test_server.py              # 终端打印解析后的帧
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `TRACEFOX_HOST_LABEL` | 附加到所有指标的 host 标签 | 自动（反向 DNS） |
+| `TRACEFOX_UDP_HOST` | Forwarder UDP 监听地址 | `0.0.0.0` |
 | `TRACEFOX_UDP_PORT` | UDP 监听端口 | `9000` |
 | `TRACEFOX_VM_URL` | VictoriaMetrics 地址 | `http://127.0.0.1:8428` |
 | `TRACEFOX_VERBOSE` | 详细日志（`0`/`1`） | `0` |
@@ -182,7 +192,7 @@ python3 test_server.py              # 终端打印解析后的帧
 | 指标 | 类型 | 说明 |
 |------|------|------|
 | `tracefox_up` | Gauge | Agent 心跳（始终为 1） |
-| `tracefox_uptime_seconds` | Gauge | Forwarder 首次收到该 host 数据至今的秒数 |
+| `tracefox_uptime_seconds` | Gauge | Forwarder 首次收到该 host_label（或兼容回退源 IP）数据至今的秒数 |
 | `tracefox_cpu_user_pct` | Gauge | CPU 用户态百分比 |
 | `tracefox_cpu_system_pct` | Gauge | CPU 内核态百分比 |
 | `tracefox_cpu_idle_pct` | Gauge | CPU 空闲百分比 |
