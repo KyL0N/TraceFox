@@ -2,13 +2,12 @@ name: C/C++ CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     strategy:
@@ -17,26 +16,73 @@ jobs:
         mode: [release, debug]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential gcc clang cppcheck
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc clang cppcheck
 
-    - name: Build Agent
-      working-directory: agent
-      run: |
-        make clean
-        make GCC=${{ matrix.compiler }} MODE=${{ matrix.mode }}
+      - name: Build Agent
+        working-directory: agent
+        run: |
+          make clean
+          make GCC=${{ matrix.compiler }} MODE=${{ matrix.mode }}
 
-    - name: Static Analysis
-      if: matrix.compiler == 'gcc' && matrix.mode == 'release'
-      working-directory: agent
-      run: |
-        cppcheck --enable=all --inconclusive --std=c99 --suppress=missingIncludeSystem src/ include/
+      - name: Static Analysis
+        if: matrix.compiler == 'gcc' && matrix.mode == 'release'
+        working-directory: agent
+        run: |
+          cppcheck --enable=all --inconclusive --std=c99 --suppress=missingIncludeSystem src/ include/
 
-    - name: Run Python Server Tests
-      working-directory: server
-      run: |
-        python3 test_protocol.py
+  sanitize:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install sanitizer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc
+
+      - name: Build Agent with Sanitizers
+        working-directory: agent
+        run: |
+          make sanitize
+
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python validation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pytest python3-yaml
+
+      - name: Run Python Protocol Tests
+        run: |
+          python3 -m pytest server/test_protocol.py -v
+
+      - name: Validate Docker Compose and Grafana Config
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          import yaml
+
+          yaml_paths = [Path("docker-compose.yml")]
+          yaml_paths.extend(Path("grafana/provisioning").rglob("*.yml"))
+          yaml_paths.extend(Path("grafana/provisioning").rglob("*.yaml"))
+
+          for path in yaml_paths:
+              with path.open("r", encoding="utf-8") as handle:
+                  yaml.safe_load(handle)
+
+          for path in Path("grafana/dashboards").glob("*.json"):
+              with path.open("r", encoding="utf-8") as handle:
+                  json.load(handle)
+          PY
