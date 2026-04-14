@@ -12,6 +12,7 @@ TF_VERSION = 2
 
 TF_TYPE_CPU = 0x01
 TF_TYPE_MEM = 0x02
+TF_TYPE_HOST_LABEL = 0x03
 TF_TYPE_NET = 0x04
 TF_TYPE_DISK = 0x05
 TF_TYPE_FS = 0x06
@@ -78,6 +79,9 @@ def _parse_tlv_entries(
                 "load5": l5 / 100.0,
                 "load15": l15 / 100.0,
             }
+
+        elif t == TF_TYPE_HOST_LABEL and length >= 1:
+            result["host_label"] = val.decode("ascii", "ignore").strip()
 
         elif t == TF_TYPE_NET and length >= 1:
             count = val[0]

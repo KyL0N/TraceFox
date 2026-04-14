@@ -7,7 +7,6 @@ services:
     environment:
       - TRACEFOX_VM_URL=http://127.0.0.1:8428
       - TRACEFOX_UDP_PORT=${TRACEFOX_UDP_PORT:-9000}
-      - TRACEFOX_HOST_LABEL=${TRACEFOX_HOST_LABEL:-}
       - TRACEFOX_VERBOSE=${TRACEFOX_VERBOSE:-0}
     depends_on:
       victoriametrics:

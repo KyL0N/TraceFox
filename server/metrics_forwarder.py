@@ -12,13 +12,12 @@ Configuration (environment variables):
   TRACEFOX_UDP_HOST    UDP listen address   (default: 0.0.0.0)
   TRACEFOX_UDP_PORT    UDP listen port      (default: 9000)
   TRACEFOX_VM_URL      VictoriaMetrics URL  (default: http://localhost:8428)
-  TRACEFOX_HOST_LABEL  Static host label    (default: auto-detect via reverse DNS)
   TRACEFOX_VERBOSE     Enable debug logs    (default: 0)
   TRACEFOX_QUEUE_SIZE  Max queued frames    (default: 1000)
 
 Usage:
   python3 metrics_forwarder.py
-  TRACEFOX_VM_URL=http://vm:8428 TRACEFOX_HOST_LABEL=sunrise python3 metrics_forwarder.py
+  TRACEFOX_VM_URL=http://vm:8428 python3 metrics_forwarder.py
 """
 
 import logging
@@ -45,7 +44,6 @@ VM_URL = os.environ.get("TRACEFOX_VM_URL", "http://localhost:8428")
 VM_IMPORT_PATH = "/api/v1/import/prometheus"
 UDP_HOST = os.environ.get("TRACEFOX_UDP_HOST", "0.0.0.0")
 UDP_PORT = int(os.environ.get("TRACEFOX_UDP_PORT", "9000"))
-DEFAULT_HOST = os.environ.get("TRACEFOX_HOST_LABEL", "")
 VERBOSE = os.environ.get("TRACEFOX_VERBOSE", "0") == "1"
 QUEUE_SIZE = int(os.environ.get("TRACEFOX_QUEUE_SIZE", "1000"))
 
@@ -55,7 +53,6 @@ else:
     from typing_extensions import Dict
 
 _host_first_seen: Dict[str, int] = {}
-_host_labels: Dict[str, str] = {}
 _running = True
 
 _stats_lock = threading.Lock()
@@ -72,18 +69,11 @@ def _handle_signal(signum, frame):
     _running = False
 
 
-def resolve_host_label(addr: tuple) -> str:
-    if DEFAULT_HOST:
-        return DEFAULT_HOST
-    ip = addr[0]
-    if ip in _host_labels:
-        return _host_labels[ip]
-    try:
-        hostname = socket.gethostbyaddr(ip)[0].split(".")[0]
-    except (socket.herror, socket.gaierror):
-        hostname = ip.replace(".", "_")
-    _host_labels[ip] = hostname
-    return hostname
+def resolve_frame_host(frame: dict, addr: tuple) -> str:
+    host_label = str(frame.get("host_label", "")).strip()
+    if host_label:
+        return host_label
+    return addr[0]
 
 
 def frame_to_prometheus(frame: dict, host: str) -> str:
@@ -201,7 +191,7 @@ def receiver_thread(sock: socket.socket, q: queue.Queue) -> None:
             log.debug("Ignoring invalid frame from %s:%d", *addr)
             continue
 
-        host = resolve_host_label(addr)
+        host = resolve_frame_host(frame, addr)
         body = frame_to_prometheus(frame, host)
 
         if VERBOSE:
@@ -276,8 +266,6 @@ def main() -> None:
     log.info("Listening on %s:%d (UDP)", UDP_HOST, UDP_PORT)
     log.info("Forwarding to VictoriaMetrics at %s", VM_URL)
     log.info("Queue size: %d", QUEUE_SIZE)
-    if DEFAULT_HOST:
-        log.info("Static host label: %s", DEFAULT_HOST)
 
     q: queue.Queue = queue.Queue(maxsize=QUEUE_SIZE)
 

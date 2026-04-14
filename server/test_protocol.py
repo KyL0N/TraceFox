@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from tracefox_protocol import parse_frame, TF_MAGIC, TF_VERSION
 from tracefox_protocol import TF_TYPE_CPU, TF_TYPE_MEM, TF_TYPE_NET
-from tracefox_protocol import TF_TYPE_DISK, TF_TYPE_FS, TF_TYPE_PROC
+from tracefox_protocol import TF_TYPE_DISK, TF_TYPE_FS, TF_TYPE_HOST_LABEL, TF_TYPE_PROC
 
 
 def _make_header(ts=1000000, seq=1):
@@ -82,6 +82,13 @@ def test_mem_and_load_tlv():
     assert result["load"]["load1"] == 1.25
     assert result["load"]["load5"] == 2.0
     assert result["load"]["load15"] == 1.5
+
+
+def test_host_label_tlv():
+    host_label = b"sunrise-edge"
+    frame = _make_header() + _make_tlv(TF_TYPE_HOST_LABEL, host_label)
+    result = parse_frame(frame)
+    assert result["host_label"] == "sunrise-edge"
 
 
 def test_net_tlv():
@@ -212,6 +219,28 @@ def test_label_escaping():
     body = frame_to_prometheus(frame, host)
     assert r'host="test\"host\nwith\\special"' in body
     assert "\n" in body
+
+
+def test_forwarder_uses_frame_host_label():
+    from metrics_forwarder import resolve_frame_host
+
+    frame = {"host_label": "edge-a"}
+    assert resolve_frame_host(frame, ("10.1.2.3", 9000)) == "edge-a"
+
+
+def test_forwarder_falls_back_to_source_ip_without_dns():
+    import socket
+    from metrics_forwarder import resolve_frame_host
+
+    def _unexpected_lookup(_ip):
+        raise AssertionError("reverse DNS should not be used")
+
+    original_lookup = socket.gethostbyaddr
+    socket.gethostbyaddr = _unexpected_lookup
+    try:
+        assert resolve_frame_host({}, ("10.1.2.3", 9000)) == "10.1.2.3"
+    finally:
+        socket.gethostbyaddr = original_lookup
 
 
 if __name__ == "__main__":
