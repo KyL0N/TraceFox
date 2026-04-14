@@ -153,13 +153,10 @@ def frame_to_prometheus(frame: dict, host: str) -> str:
         emit("tracefox_disk_write_iops", dl, d["write_iops_delta"])
         emit("tracefox_disk_io_util_pct", dl, d["io_util_pct"])
 
-    log.debug("fs: %s", frame.get("fs", []))
     for fs in frame.get("fs", []):
         fl = {**hl, "mount": fs["mount"]}
         emit("tracefox_fs_total_kb", fl, fs["total_kb"])
-        log.debug("fs_total_kb: %s", fs["total_kb"])
-        log.debug("fs_used_pct: %s", fs["used_pct"])
-        emit("tracefox_fs_used_pct", fl, fs["used_pct"])
+        emit("tracefox_fs_used_pct", fl, fs["used_pct"] / 10.0)
 
     for pg in frame.get("proc_groups", []):
         pl = {**hl, "group": pg["name"]}
