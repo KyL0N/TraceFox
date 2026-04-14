@@ -243,6 +243,42 @@ def test_forwarder_falls_back_to_source_ip_without_dns():
         socket.gethostbyaddr = original_lookup
 
 
+def test_sender_retries_same_payload_before_dequeueing_next():
+    import queue
+    import metrics_forwarder
+
+    q = queue.Queue()
+    q.put("body-1")
+    q.put("body-2")
+
+    calls = []
+    outcomes = [False, True, True]
+    original_push = metrics_forwarder.push_to_vm
+    original_sleep = metrics_forwarder.time.sleep
+    original_running = metrics_forwarder._running
+    original_stats = metrics_forwarder._stats.copy()
+
+    def _push(body):
+        calls.append(body)
+        return outcomes.pop(0)
+
+    metrics_forwarder.push_to_vm = _push
+    metrics_forwarder.time.sleep = lambda _seconds: None
+    metrics_forwarder._running = False
+    metrics_forwarder._stats.update(
+        forwarded=0, errors=0, drops=0, push_failures=0
+    )
+    try:
+        metrics_forwarder.sender_thread(q)
+    finally:
+        metrics_forwarder.push_to_vm = original_push
+        metrics_forwarder.time.sleep = original_sleep
+        metrics_forwarder._running = original_running
+        metrics_forwarder._stats.update(original_stats)
+
+    assert calls == ["body-1", "body-1", "body-2"]
+
+
 if __name__ == "__main__":
     test_funcs = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0

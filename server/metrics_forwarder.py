@@ -221,15 +221,18 @@ def sender_thread(q: queue.Queue) -> None:
     global _running
     backoff = 0.0
     max_backoff = 30.0
+    current_body = None
 
-    while _running or not q.empty():
-        try:
-            body = q.get(timeout=1.0)
-        except queue.Empty:
-            continue
+    while _running or current_body is not None or not q.empty():
+        if current_body is None:
+            try:
+                current_body = q.get(timeout=1.0)
+            except queue.Empty:
+                continue
 
-        if push_to_vm(body):
+        if push_to_vm(current_body):
             backoff = 0.0
+            current_body = None
             with _stats_lock:
                 _stats["forwarded"] += 1
                 if _stats["forwarded"] % 100 == 0:
