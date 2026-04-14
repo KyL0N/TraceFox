@@ -127,6 +127,8 @@ proc_prefix=node,iperf3
 
 Agent 启动时按以下路径搜索配置文件：`config/agent.conf` → `agent/config/agent.conf` → `/etc/tracefox/agent.conf`。可用 `-c <path>` 显式指定（指定路径不存在时直接退出）。配置优先级：
 
+默认 release 构建使用静态链接；在 glibc 工具链下，`server_host` 需要填写字面量 IPv4/IPv6 地址，避免 `getaddrinfo()` 带来的静态链接运行时依赖告警。若确实需要 hostname 解析，请使用 `make debug` 或显式去掉 `-static-pie`。
+
 1. 命令行参数（最高）
 2. 配置文件
 3. 内置默认值（最低）
