@@ -68,17 +68,44 @@ static int is_ascii_safe(const char *value)
 	return 1;
 }
 
-static int resolve_addr(const char *host, uint16_t port, struct sockaddr_in *addr)
+static int resolve_addr(const char *host, uint16_t port, struct sockaddr_storage *addr, socklen_t *addr_len, int *family)
 {
-	memset(addr, 0, sizeof(*addr));
-	addr->sin_family = AF_INET;
-	addr->sin_port   = htons(port);
+	char port_buf[6]         = { 0 };
+	struct addrinfo hints    = { 0 };
+	struct addrinfo *results = NULL;
+	struct addrinfo *cursor  = NULL;
 
-	if (inet_pton(AF_INET, host, &addr->sin_addr) != 1) {
+	if (!host || !addr || !addr_len || !family) {
 		return -1;
 	}
 
-	return 0;
+	(void)snprintf(port_buf, sizeof(port_buf), "%u", (unsigned)port);
+
+	hints.ai_family   = AF_UNSPEC;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_protocol = IPPROTO_UDP;
+
+	int rc = getaddrinfo(host, port_buf, &hints, &results);
+	if (rc != 0) {
+		TF_LOG_ERR("getaddrinfo(%s:%s): %s", host, port_buf, gai_strerror(rc));
+		return -1;
+	}
+
+	for (cursor = results; cursor != NULL; cursor = cursor->ai_next) {
+		if ((cursor->ai_family != AF_INET && cursor->ai_family != AF_INET6) || cursor->ai_addrlen > sizeof(*addr)) {
+			continue;
+		}
+
+		memset(addr, 0, sizeof(*addr));
+		memcpy(addr, cursor->ai_addr, cursor->ai_addrlen);
+		*addr_len = (socklen_t)cursor->ai_addrlen;
+		*family   = cursor->ai_family;
+		freeaddrinfo(results);
+		return 0;
+	}
+
+	freeaddrinfo(results);
+	return -1;
 }
 
 static char *trim_inplace(char *string)
@@ -244,7 +271,8 @@ static int sock          = -1;
 static int file_mode     = 0;
 static char *output_file = NULL;
 static FILE *log_file    = NULL;
-static struct sockaddr_in dest;
+static struct sockaddr_storage dest_addr;
+static socklen_t dest_addr_len = 0;
 
 static int init_agent_state(int argc, char **argv, struct agent_config *cfg)
 {
@@ -305,14 +333,15 @@ static int init_agent_state(int argc, char **argv, struct agent_config *cfg)
 		}
 	}
 	else {
-		sock = socket(AF_INET, SOCK_DGRAM, 0);
-		if (sock < 0) {
-			TF_LOG_ERR("socket: %s", strerror(errno));
+		int dest_family = AF_UNSPEC;
+		if (resolve_addr(cfg->server_host, cfg->server_port, &dest_addr, &dest_addr_len, &dest_family) != 0) {
+			TF_LOG_ERR("Failed to resolve %s:%u", cfg->server_host, (unsigned)cfg->server_port);
 			return 1;
 		}
-		if (resolve_addr(cfg->server_host, cfg->server_port, &dest) != 0) {
-			TF_LOG_ERR("Failed to resolve %s", cfg->server_host);
-			close(sock);
+
+		sock = socket(dest_family, SOCK_DGRAM, 0);
+		if (sock < 0) {
+			TF_LOG_ERR("socket: %s", strerror(errno));
 			return 1;
 		}
 	}
@@ -427,7 +456,7 @@ int main(int argc, char **argv)
 			(void)fflush(log_file);
 		}
 		else {
-			ssize_t sent = sendto(sock, buffer, writer.len, 0, (struct sockaddr *)&dest, sizeof(dest));
+			ssize_t sent = sendto(sock, buffer, writer.len, 0, (const struct sockaddr *)&dest_addr, dest_addr_len);
 			if (sent < 0) {
 				push_errors++;
 			}
