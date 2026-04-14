@@ -35,6 +35,7 @@ struct proc_ctx
 	struct proc_prev history[TF_PROC_TRACK];
 	char comm_prefix_list[MAX_COMM_PREFIX][COMM_PREFIX_LEN];
 	struct watch_group watch_groups[MAX_COMM_PREFIX];
+	int disabled;
 	size_t cpu_count;
 	size_t comm_prefix_count;
 	size_t watch_group_count;
@@ -331,6 +332,10 @@ static int proc_init(struct tf_collector *col, const struct agent_config *cfg)
 	col->ctx = ctx;
 
 	apply_config_prefixes(ctx, cfg);
+	ctx->disabled = (cfg->proc_prefix_count == 0) ? 1 : 0;
+	if (ctx->disabled) {
+		TF_LOG_INFO("[proc] collector disabled: set proc_prefix to enable process metrics");
+	}
 
 	return 0;
 }
@@ -346,6 +351,10 @@ static void proc_destroy(struct tf_collector *col)
 static int proc_collect(struct proc_ctx *ctx, const struct agent_config *cfg)
 {
 	(void)cfg;
+	if (ctx->disabled) {
+		memset(&ctx->last_payload, 0, sizeof(ctx->last_payload));
+		return 0;
+	}
 
 	time_t now = time(NULL);
 	if (now == (time_t)-1 || ctx->last_scan_time == 0 || (now - ctx->last_scan_time) >= TF_TRACKER_INTERVAL_SEC) {
@@ -439,6 +448,10 @@ static int proc_collect(struct proc_ctx *ctx, const struct agent_config *cfg)
 
 static int proc_push(struct proc_ctx *ctx, struct tlv_writer *wrt)
 {
+	if (ctx->disabled) {
+		return 0;
+	}
+
 	uint8_t payload[1 + TF_MAX_PROC_GROUPS * TF_PROC_GROUP_PAYLOAD_LEN] = { 0 };
 	uint8_t *payload_cursor                                             = payload;
 
@@ -478,6 +491,10 @@ static void proc_print(struct tf_collector *col, FILE *out)
 {
 	struct proc_ctx *ctx = (struct proc_ctx *)col->ctx;
 	if (!ctx) return;
+	if (ctx->disabled) {
+		(void)fprintf(out, "PROC: disabled (set proc_prefix to enable)\n");
+		return;
+	}
 
 	(void)fprintf(out, "PROC: groups=%u\n", ctx->last_payload.group_count);
 	for (uint8_t i = 0; i < ctx->last_payload.group_count && i < TF_MAX_PROC_GROUPS; ++i) {
