@@ -9,8 +9,6 @@
 #include <errno.h>
 #include "tracefox.h"
 
-#define MAX_COMM_PREFIX 32 // 最多支持 32 个前缀
-#define COMM_PREFIX_LEN 32 // 每个前缀最长 31 字节
 #define PID_HASH(pid)   ((unsigned long)((unsigned int)(pid) * 2654435761u) % TF_PROC_TRACK)
 #define THREAD_HASH(pid, tid)                                                                                                                                    \
 	((size_t)(((uint64_t)(uint32_t)(pid) * UINT64_C(11400714819323198485)) ^ ((uint64_t)(uint32_t)(tid) * UINT64_C(14029467366897019727))) % \
@@ -24,7 +22,7 @@ struct pid_list
 
 struct watch_group
 {
-	char name[COMM_PREFIX_LEN];
+	char name[TF_COMM_PREFIX_LEN];
 	struct pid_list list;
 };
 
@@ -66,12 +64,10 @@ struct proc_ctx
 	struct proc_prev history[TF_PROC_TRACK];
 	struct thread_prev thread_history[TF_THREAD_TRACK];
 	struct thread_candidate thread_candidates[TF_THREAD_CANDIDATES];
-	char comm_prefix_list[MAX_COMM_PREFIX][COMM_PREFIX_LEN];
-	struct watch_group watch_groups[MAX_COMM_PREFIX];
+	struct watch_group watch_groups[TF_MAX_COMM_PREFIX];
 	int disabled;
 	int thread_frame_warned;
 	size_t cpu_count;
-	size_t comm_prefix_count;
 	size_t watch_group_count;
 	uint32_t thread_generation;
 	uint8_t thread_mode;
@@ -85,30 +81,12 @@ struct proc_ctx
 
 static void apply_config_prefixes(struct proc_ctx *ctx, const struct agent_config *cfg)
 {
-	for (size_t i = 0; i < cfg->proc_prefix_count && i < MAX_COMM_PREFIX; ++i) {
-		strncpy(ctx->comm_prefix_list[i], cfg->proc_prefixes[i], COMM_PREFIX_LEN - 1);
-		ctx->comm_prefix_list[i][COMM_PREFIX_LEN - 1] = '\0';
-
-		strncpy(ctx->watch_groups[i].name, cfg->proc_prefixes[i], COMM_PREFIX_LEN - 1);
-		ctx->watch_groups[i].name[COMM_PREFIX_LEN - 1] = '\0';
+	for (size_t i = 0; i < cfg->proc_prefix_count && i < TF_MAX_COMM_PREFIX; ++i) {
+		strncpy(ctx->watch_groups[i].name, cfg->proc_prefixes[i], TF_COMM_PREFIX_LEN - 1);
+		ctx->watch_groups[i].name[TF_COMM_PREFIX_LEN - 1] = '\0';
 		ctx->watch_groups[i].list.count                = 0;
 	}
-	ctx->comm_prefix_count = cfg->proc_prefix_count;
 	ctx->watch_group_count = cfg->proc_prefix_count;
-}
-
-static int comm_prefix_match(struct proc_ctx *ctx, const char *comm)
-{
-	if (ctx->comm_prefix_count == 0) {
-		return 1; // 没设置前缀 → 全部监控
-	}
-	for (size_t i = 0; i < ctx->comm_prefix_count; i++) {
-		const char *prefix = ctx->comm_prefix_list[i];
-		if (strncmp(comm, prefix, strlen(prefix)) == 0) {
-			return 1;
-		}
-	}
-	return 0;
 }
 
 static struct proc_prev *find_slot(struct proc_ctx *ctx, long pid)
@@ -552,20 +530,6 @@ static void tracker_add_pid(struct proc_ctx *ctx, const char *comm, long pid)
 			return;
 		}
 	}
-
-	if (ctx->comm_prefix_count == 0) {
-		if (ctx->watch_group_count < MAX_COMM_PREFIX) {
-			size_t g = ctx->watch_group_count;
-			strncpy(ctx->watch_groups[g].name, comm, COMM_PREFIX_LEN - 1);
-			ctx->watch_groups[g].name[COMM_PREFIX_LEN - 1] = '\0';
-			ctx->watch_groups[g].list.pids[0]              = pid;
-			ctx->watch_groups[g].list.count                = 1;
-			ctx->watch_group_count++;
-		}
-		else {
-			TF_LOG_WARN("[proc] auto-group limit (%d) reached, dropping: %s", MAX_COMM_PREFIX, comm);
-		}
-	}
 }
 
 static void tracker_scan_proc(struct proc_ctx *ctx)
@@ -596,7 +560,7 @@ static void tracker_scan_proc(struct proc_ctx *ctx)
 			continue;
 		}
 
-		char comm[COMM_PREFIX_LEN];
+		char comm[TF_COMM_PREFIX_LEN];
 		if (!fgets(comm, sizeof(comm), comm_fp)) {
 			(void)fclose(comm_fp);
 			continue;
@@ -606,10 +570,6 @@ static void tracker_scan_proc(struct proc_ctx *ctx)
 		size_t len = strlen(comm);
 		if (len > 0 && comm[len - 1] == '\n') {
 			comm[len - 1] = '\0';
-		}
-
-		if (!comm_prefix_match(ctx, comm)) {
-			continue;
 		}
 
 		tracker_add_pid(ctx, comm, pid);
@@ -674,9 +634,9 @@ static int proc_collect(struct proc_ctx *ctx, const struct agent_config *cfg)
 		total_diff = 1;
 	}
 
-	uint32_t inst_count[MAX_COMM_PREFIX]  = { 0 };
-	uint64_t cpu_sum_x10[MAX_COMM_PREFIX] = { 0 };
-	uint64_t rss_sum_kb[MAX_COMM_PREFIX]  = { 0 };
+	uint32_t inst_count[TF_MAX_COMM_PREFIX]  = { 0 };
+	uint64_t cpu_sum_x10[TF_MAX_COMM_PREFIX] = { 0 };
+	uint64_t rss_sum_kb[TF_MAX_COMM_PREFIX]  = { 0 };
 
 	for (size_t group_idx = 0; group_idx < ctx->watch_group_count; ++group_idx) {
 		const struct watch_group *grp = &ctx->watch_groups[group_idx];
@@ -782,6 +742,11 @@ static int thread_push(struct proc_ctx *ctx, struct tlv_writer *wrt)
 	for (uint8_t group_index = 0; group_index < ctx->last_thread_payload.group_count; ++group_index) {
 		const struct thread_group_entry *group = &ctx->last_thread_payload.groups[group_index];
 		uint8_t emit_top_count = group->top_count;
+		int top_count_capped = 0;
+		if (emit_top_count > TF_MAX_THREAD_TOP_N) {
+			emit_top_count = TF_MAX_THREAD_TOP_N;
+			top_count_capped = 1;
+		}
 		size_t remaining = wrt->cap > wrt->len ? wrt->cap - wrt->len : 0U;
 
 		while (emit_top_count > 0U && 2U + TF_THREAD_GROUP_HEADER_PAYLOAD_LEN + (size_t)emit_top_count * TF_THREAD_ENTRY_PAYLOAD_LEN > remaining) {
@@ -799,7 +764,7 @@ static int thread_push(struct proc_ctx *ctx, struct tlv_writer *wrt)
 		uint8_t payload[TF_THREAD_GROUP_HEADER_PAYLOAD_LEN + TF_MAX_THREAD_TOP_N * TF_THREAD_ENTRY_PAYLOAD_LEN] = { 0 };
 		uint8_t *payload_cursor = payload;
 		uint8_t flags = group->flags;
-		if (emit_top_count < group->top_count) {
+		if (top_count_capped || emit_top_count < group->top_count) {
 			flags |= TF_THREAD_FLAG_TRUNCATED;
 			if (!ctx->thread_frame_warned) {
 				TF_LOG_WARN("[thread] frame budget reduced the configured top-N payload");

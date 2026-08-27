@@ -5,11 +5,8 @@ on:
   push:
     branches:
       - "main"
-    tags:
-      - "v*"
     paths:
       - "VERSION"
-      - ".github/workflows/windows-release.yml"
 
 permissions:
   contents: write
@@ -25,11 +22,7 @@ jobs:
       - name: Resolve release version
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq "tag") {
-            $env:GITHUB_REF_NAME
-          } else {
-            (Get-Content VERSION -Raw).Trim()
-          }
+          $version = (Get-Content VERSION -Raw).Trim()
           if ($version -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
             throw "VERSION must be a semantic version beginning with v; got '$version'."
           }
@@ -46,7 +39,7 @@ jobs:
           $archive = Join-Path $env:GITHUB_WORKSPACE "tracefox-server-$env:TRACEFOX_VERSION-windows-amd64.zip"
 
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
-          Copy-Item tracefox.cmd, README.md, LICENSE, .env.example -Destination $stage
+          Copy-Item tracefox.cmd, README.md, LICENSE, VERSION, .env.example -Destination $stage
           Copy-Item server, grafana, windows -Destination $stage -Recurse
           New-Item -ItemType Directory -Path (Join-Path $stage ".tracefox") -Force | Out-Null
           Copy-Item .tracefox/runtime -Destination (Join-Path $stage ".tracefox") -Recurse
@@ -65,7 +58,7 @@ jobs:
           "TRACEFOX_ARCHIVE=$archive" | Out-File $env:GITHUB_ENV -Append
           "TRACEFOX_CHECKSUM=$archive.sha256" | Out-File $env:GITHUB_ENV -Append
 
-      - name: Verify archive starts fully offline
+      - name: Verify archive starts without runtime downloads
         shell: pwsh
         run: |
           $verify = Join-Path $env:RUNNER_TEMP "tracefox-release-verify"
@@ -75,7 +68,8 @@ jobs:
             "tracefox.cmd",
             ".tracefox\runtime\python\python.exe",
             ".tracefox\runtime\victoriametrics\victoria-metrics-windows-amd64-prod.exe",
-            ".tracefox\runtime\grafana\bin\grafana.exe"
+            ".tracefox\runtime\grafana\bin\grafana.exe",
+            ".tracefox\runtime\manifest.sha256"
           )
           foreach ($relativePath in $required) {
             if (-not (Test-Path -LiteralPath (Join-Path $verify $relativePath))) {
@@ -85,6 +79,7 @@ jobs:
 
           Push-Location $verify
           try {
+            $env:TRACEFOX_OFFLINE = "1"
             & .\tracefox.cmd start
             if ($LASTEXITCODE -ne 0) {
               throw "Offline release start failed with exit code $LASTEXITCODE."
@@ -95,6 +90,7 @@ jobs:
             }
           } finally {
             & .\tracefox.cmd stop
+            Remove-Item Env:TRACEFOX_OFFLINE -ErrorAction SilentlyContinue
             Pop-Location
           }
 
@@ -120,19 +116,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view $env:TRACEFOX_VERSION *> $null
-          if ($LASTEXITCODE -ne 0) {
-            if ($env:GITHUB_REF_TYPE -eq "tag") {
-              gh release create $env:TRACEFOX_VERSION `
-                --verify-tag `
-                --title "TraceFox $env:TRACEFOX_VERSION" `
-                --generate-notes
-            } else {
-              gh release create $env:TRACEFOX_VERSION `
-                --target $env:GITHUB_SHA `
-                --title "TraceFox $env:TRACEFOX_VERSION" `
-                --generate-notes
+          $existingTarget = gh release view $env:TRACEFOX_VERSION --json targetCommitish --jq .targetCommitish 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if ($existingTarget.Trim() -ne $env:GITHUB_SHA) {
+              throw "Release $env:TRACEFOX_VERSION targets $existingTarget, not $env:GITHUB_SHA; refusing to replace assets from another commit."
             }
+          } else {
+            gh release create $env:TRACEFOX_VERSION `
+              --target $env:GITHUB_SHA `
+              --title "TraceFox $env:TRACEFOX_VERSION" `
+              --generate-notes
             if ($LASTEXITCODE -ne 0) {
               throw "Failed to create release $env:TRACEFOX_VERSION."
             }

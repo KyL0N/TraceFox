@@ -3,8 +3,10 @@ name: C/C++ CI
 on:
   push:
     branches: ["main"]
+    paths-ignore: ["VERSION"]
   pull_request:
     branches: ["main"]
+    paths-ignore: ["VERSION"]
 
 jobs:
   build:

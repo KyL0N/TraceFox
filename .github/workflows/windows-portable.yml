@@ -3,8 +3,10 @@ name: Windows Portable CI
 on:
   push:
     branches: ["main"]
+    paths-ignore: ["VERSION"]
   pull_request:
     branches: ["main"]
+    paths-ignore: ["VERSION"]
 
 jobs:
   portable-server:
@@ -18,11 +20,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .tracefox/runtime
-          key: tracefox-windows-runtime-${{ hashFiles('windows/runtime-manifest.psd1') }}
+          key: tracefox-windows-runtime-v2-${{ hashFiles('windows/runtime-manifest.psd1') }}
 
       - name: Bootstrap portable runtime
         shell: cmd
         run: tracefox.cmd bootstrap
+
+      - name: Seed portable configuration without a password
+        shell: pwsh
+        run: |
+          [System.IO.File]::WriteAllText(
+            ".tracefox\config.env",
+            "TRACEFOX_QUEUE_SIZE=17`r`n"
+          )
 
       - name: Start portable server
         shell: cmd
@@ -32,9 +42,54 @@ jobs:
         shell: cmd
         run: tracefox.cmd status
 
+      - name: Verify generated password preserved existing configuration
+        shell: pwsh
+        run: |
+          $config = Get-Content .tracefox\config.env -Raw
+          if ($config -notmatch '(?m)^TRACEFOX_QUEUE_SIZE=17\r?$') {
+            throw "Existing config.env values were not preserved."
+          }
+          if ($config -notmatch '(?m)^GRAFANA_PASSWORD=\S+\r?$') {
+            throw "Grafana password was not persisted."
+          }
+
       - name: Run end-to-end UDP to Grafana smoke test
         shell: cmd
         run: .tracefox\runtime\python\python.exe windows\smoke_test.py
+
+      - name: Verify stable state file and forwarder restart
+        shell: pwsh
+        run: |
+          $statePath = ".tracefox\state\state.json"
+          $before = Get-Content $statePath -Raw | ConvertFrom-Json
+          $stateWriteTime = (Get-Item $statePath).LastWriteTimeUtc
+          Start-Sleep -Seconds 4
+          if ((Get-Item $statePath).LastWriteTimeUtc -ne $stateWriteTime) {
+            throw "state.json was rewritten even though no component PID changed."
+          }
+
+          Stop-Process -Id $before.forwarder_pid -Force
+          $deadline = (Get-Date).AddSeconds(20)
+          $after = $null
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 1
+            if (Test-Path $statePath) {
+              $candidate = Get-Content $statePath -Raw | ConvertFrom-Json
+              if ($candidate.forwarder_pid -ne $before.forwarder_pid -and
+                  $null -ne (Get-Process -Id $candidate.forwarder_pid -ErrorAction SilentlyContinue)) {
+                $after = $candidate
+                break
+              }
+            }
+          }
+          if ($null -eq $after) {
+            throw "Forwarder was not restarted with a new PID."
+          }
+
+          & .\tracefox.cmd status
+          if ($LASTEXITCODE -ne 0) {
+            throw "TraceFox status did not recover after the forwarder restart."
+          }
 
       - name: Stop portable server
         if: always()

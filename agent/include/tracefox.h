@@ -11,7 +11,6 @@
 #define TF_MAX_INTERFACES  4
 #define TF_MAX_DISKS       16
 #define TF_MAX_FS          16
-#define TF_MAX_PROC        10
 #define TF_PROC_TRACK      64
 #define TF_MAX_PROC_GROUPS 8
 #define TF_THREAD_TRACK    1024
@@ -20,8 +19,6 @@
 #define TF_MAX_THREAD_TOP_N 7
 #define TF_DEFAULT_THREAD_TOP_N 5
 #define TF_THREAD_STATE_COUNT 7
-
-#define TF_MAX_PAYLOAD_SIZE 1024
 
 /* 默认配置 */
 #define TF_DEFAULT_SERVER_HOST  "127.0.0.1"

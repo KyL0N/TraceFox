@@ -17,6 +17,7 @@ $script:DataRoot = Join-Path $script:WorkRoot "data"
 $script:LogRoot = Join-Path $script:WorkRoot "logs"
 $script:StateRoot = Join-Path $script:WorkRoot "state"
 $script:ConfigFile = Join-Path $script:WorkRoot "config.env"
+$script:RuntimeStateFile = Join-Path $script:RuntimeRoot "manifest.sha256"
 $script:StateFile = Join-Path $script:StateRoot "state.json"
 $script:StopRequestFile = Join-Path $script:StateRoot "stop.request"
 $script:SupervisorLog = Join-Path $script:LogRoot "supervisor.log"
@@ -99,6 +100,36 @@ function Read-EnvFile {
     return $values
 }
 
+function Set-EnvFileValue {
+    param(
+        [string]$Path,
+        [string]$Key,
+        [string]$Value
+    )
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path -LiteralPath $Path) {
+        foreach ($line in [System.IO.File]::ReadAllLines($Path)) {
+            $lines.Add($line)
+        }
+    }
+
+    $replacement = "$Key=$Value"
+    $updated = $false
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -match ("^\s*" + [regex]::Escape($Key) + "\s*=")) {
+            $lines[$index] = $replacement
+            $updated = $true
+        }
+    }
+    if (-not $updated) {
+        $lines.Add($replacement)
+    }
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllLines($Path, $lines, $utf8NoBom)
+}
+
 function ConvertTo-Port {
     param(
         [string]$Name,
@@ -139,12 +170,10 @@ function Get-TraceFoxConfig {
 
     if (-not $values["GRAFANA_PASSWORD"]) {
         $values["GRAFANA_PASSWORD"] = ([System.Guid]::NewGuid().ToString("N")).Substring(0, 20)
-        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-        [System.IO.File]::WriteAllText(
-            $script:ConfigFile,
-            "GRAFANA_PASSWORD=$($values['GRAFANA_PASSWORD'])`r`n",
-            $utf8NoBom
-        )
+        Set-EnvFileValue `
+            -Path $script:ConfigFile `
+            -Key "GRAFANA_PASSWORD" `
+            -Value $values["GRAFANA_PASSWORD"]
     }
 
     return [PSCustomObject]@{
@@ -190,6 +219,10 @@ function Get-Artifact {
         Remove-Item -LiteralPath $downloadPath -Force
     }
 
+    if ($env:TRACEFOX_OFFLINE -eq "1") {
+        throw "$Name runtime is missing or invalid, and TRACEFOX_OFFLINE=1 forbids downloads."
+    }
+
     Write-Host "[TraceFox] Downloading $Name $($Artifact.Version)..."
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $Artifact.Url -OutFile $downloadPath -UseBasicParsing
@@ -225,12 +258,13 @@ function Set-EmbeddedPythonPath {
 function Install-RuntimeComponent {
     param(
         [string]$Name,
-        [hashtable]$Artifact
+        [hashtable]$Artifact,
+        [bool]$ForceReinstall = $false
     )
 
     $destination = Join-Path $script:RuntimeRoot $Artifact.Destination
     $expectedExecutable = Join-Path $destination $Artifact.Executable
-    if (Test-Path -LiteralPath $expectedExecutable) {
+    if (-not $ForceReinstall -and (Test-Path -LiteralPath $expectedExecutable)) {
         if ($Name -eq "Python") {
             Set-EmbeddedPythonPath -PythonRoot $destination
         }
@@ -300,9 +334,19 @@ function Ensure-Runtime {
         throw "Unsupported runtime manifest version."
     }
 
-    Install-RuntimeComponent -Name "Python" -Artifact $manifest.Python
-    Install-RuntimeComponent -Name "VictoriaMetrics" -Artifact $manifest.VictoriaMetrics
-    Install-RuntimeComponent -Name "Grafana" -Artifact $manifest.Grafana
+    $manifestHash = (Get-FileHash -LiteralPath $script:ManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $installedHash = ""
+    if (Test-Path -LiteralPath $script:RuntimeStateFile) {
+        $installedHash = ([System.IO.File]::ReadAllText($script:RuntimeStateFile)).Trim().ToLowerInvariant()
+    }
+    $forceReinstall = $installedHash -ne $manifestHash
+
+    Install-RuntimeComponent -Name "Python" -Artifact $manifest.Python -ForceReinstall $forceReinstall
+    Install-RuntimeComponent -Name "VictoriaMetrics" -Artifact $manifest.VictoriaMetrics -ForceReinstall $forceReinstall
+    Install-RuntimeComponent -Name "Grafana" -Artifact $manifest.Grafana -ForceReinstall $forceReinstall
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($script:RuntimeStateFile, "$manifestHash`r`n", $utf8NoBom)
 }
 
 function Test-SupervisorRunning {
@@ -313,7 +357,7 @@ function Test-SupervisorRunning {
     } catch [System.Threading.WaitHandleCannotBeOpenedException] {
         return $false
     } catch {
-        return $false
+        throw
     }
 }
 
@@ -455,7 +499,7 @@ function Set-ChildEnvironment {
     $env:GF_SECURITY_ADMIN_PASSWORD = $Config.GrafanaPassword
     $env:GF_USERS_ALLOW_SIGN_UP = "false"
     $env:GF_AUTH_ANONYMOUS_ENABLED = "false"
-    $env:GF_SERVER_HTTP_ADDR = "0.0.0.0"
+    $env:GF_SERVER_HTTP_ADDR = "127.0.0.1"
     $env:GF_SERVER_HTTP_PORT = [string]$Config.GrafanaPort
     $env:GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH = $defaultDashboard
 }
@@ -522,6 +566,59 @@ function Write-State {
     $state | ConvertTo-Json | Set-Content -LiteralPath $script:StateFile -Encoding UTF8
 }
 
+function Read-State {
+    if (-not (Test-Path -LiteralPath $script:StateFile)) {
+        return $null
+    }
+
+    try {
+        return Get-Content -LiteralPath $script:StateFile -Raw | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Test-StateProcessRunning {
+    param(
+        [object]$State,
+        [string]$PropertyName
+    )
+
+    if ($null -eq $State) {
+        return $false
+    }
+    $property = $State.PSObject.Properties[$PropertyName]
+    if ($null -eq $property) {
+        return $false
+    }
+
+    $processId = 0
+    if (-not [int]::TryParse([string]$property.Value, [ref]$processId) -or $processId -le 0) {
+        return $false
+    }
+    return $null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)
+}
+
+function Test-AllStateProcessesRunning {
+    param([object]$State)
+
+    $vmRunning = Test-StateProcessRunning -State $State -PropertyName "victoriametrics_pid"
+    $forwarderRunning = Test-StateProcessRunning -State $State -PropertyName "forwarder_pid"
+    $grafanaRunning = Test-StateProcessRunning -State $State -PropertyName "grafana_pid"
+    return $vmRunning -and $forwarderRunning -and $grafanaRunning
+}
+
+function Test-PortableHealth {
+    param([PSCustomObject]$Config)
+
+    $state = Read-State
+    if (-not (Test-AllStateProcessesRunning -State $state)) {
+        return $false
+    }
+    return (Test-HttpEndpoint -Url "http://127.0.0.1:$($Config.VmPort)/health") -and
+        (Test-HttpEndpoint -Url "http://127.0.0.1:$($Config.GrafanaPort)/api/health")
+}
+
 function Stop-ChildProcess {
     param(
         [string]$Name,
@@ -552,6 +649,12 @@ function Invoke-Supervisor {
     }
 
     $processes = @{}
+    $restartCounts = @{
+        victoriametrics = 0
+        forwarder = 0
+        grafana = 0
+    }
+    $startedAt = @{}
     try {
         $config = Get-TraceFoxConfig
         Ensure-Runtime
@@ -561,24 +664,37 @@ function Invoke-Supervisor {
 
         Write-TraceFoxLog "Supervisor started with PID $PID."
         $processes["victoriametrics"] = Start-Component -Name "victoriametrics" -Config $config
+        $startedAt["victoriametrics"] = Get-Date
         $vmHealth = "http://127.0.0.1:$($Config.VmPort)/health"
         if (-not (Wait-ForCondition -Condition { Test-HttpEndpoint -Url $vmHealth } -TimeoutSeconds 30)) {
             Write-TraceFoxLog "VictoriaMetrics did not become healthy within 30 seconds."
         }
         $processes["forwarder"] = Start-Component -Name "forwarder" -Config $config
+        $startedAt["forwarder"] = Get-Date
         $processes["grafana"] = Start-Component -Name "grafana" -Config $config
+        $startedAt["grafana"] = Get-Date
         Write-State -Processes $processes
 
         while (-not (Test-Path -LiteralPath $script:StopRequestFile)) {
             foreach ($name in @("victoriametrics", "forwarder", "grafana")) {
                 $process = $processes[$name]
                 if ($process.HasExited) {
-                    Write-TraceFoxLog "$name exited with code $($process.ExitCode); restarting in 2 seconds."
-                    Start-Sleep -Seconds 2
+                    $now = Get-Date
+                    if (($now - $startedAt[$name]).TotalSeconds -ge 60) {
+                        $restartCounts[$name] = 0
+                    }
+                    $restartCounts[$name]++
+                    if ($restartCounts[$name] -gt 3) {
+                        throw "$name crashed more than three times without staying up for 60 seconds."
+                    }
+                    $delay = [int][Math]::Min([Math]::Pow(2, $restartCounts[$name] - 1), 8)
+                    Write-TraceFoxLog "$name exited with code $($process.ExitCode); restart attempt $($restartCounts[$name])/3 in $delay seconds."
+                    Start-Sleep -Seconds $delay
                     $processes[$name] = Start-Component -Name $name -Config $config
+                    $startedAt[$name] = Get-Date
+                    Write-State -Processes $processes
                 }
             }
-            Write-State -Processes $processes
             Start-Sleep -Seconds 2
         }
         Write-TraceFoxLog "Stop requested."
@@ -646,16 +762,17 @@ function Invoke-Start {
         throw "The TraceFox supervisor failed to start."
     }
 
-    $vmHealth = "http://127.0.0.1:$($Config.VmPort)/health"
-    $grafanaHealth = "http://127.0.0.1:$($Config.GrafanaPort)/api/health"
     $healthy = Wait-ForCondition -Condition {
         if ($supervisor.HasExited) {
             throw "The TraceFox supervisor exited during startup."
         }
-        (Test-HttpEndpoint -Url $vmHealth) -and
-        (Test-HttpEndpoint -Url $grafanaHealth) -and
-        (Test-Path -LiteralPath $script:StateFile)
+        Test-PortableHealth -Config $config
     } -TimeoutSeconds 120 -PollMilliseconds 1000
+
+    if ($healthy) {
+        Start-Sleep -Seconds 3
+        $healthy = -not $supervisor.HasExited -and (Test-PortableHealth -Config $config)
+    }
 
     if (-not $healthy) {
         New-Item -ItemType File -Path $script:StopRequestFile -Force | Out-Null
@@ -683,13 +800,17 @@ function Invoke-Status {
     }
 
     $config = Get-TraceFoxConfig
+    $state = Read-State
+    $vmRunning = Test-StateProcessRunning -State $state -PropertyName "victoriametrics_pid"
+    $forwarderRunning = Test-StateProcessRunning -State $state -PropertyName "forwarder_pid"
+    $grafanaRunning = Test-StateProcessRunning -State $state -PropertyName "grafana_pid"
     $vmHealthy = Test-HttpEndpoint -Url "http://127.0.0.1:$($Config.VmPort)/health"
     $grafanaHealthy = Test-HttpEndpoint -Url "http://127.0.0.1:$($Config.GrafanaPort)/api/health"
     Write-Host "TraceFox supervisor: running"
-    Write-Host "VictoriaMetrics:     $(if ($vmHealthy) { 'healthy' } else { 'unhealthy' })"
-    Write-Host "Grafana:             $(if ($grafanaHealthy) { 'healthy' } else { 'unhealthy' })"
-    Write-Host "Forwarder:           UDP $($Config.UdpHost):$($Config.UdpPort)"
-    return ($vmHealthy -and $grafanaHealthy)
+    Write-Host "VictoriaMetrics:     $(if ($vmRunning -and $vmHealthy) { 'healthy' } else { 'unhealthy' })"
+    Write-Host "Grafana:             $(if ($grafanaRunning -and $grafanaHealthy) { 'healthy' } else { 'unhealthy' })"
+    Write-Host "Forwarder:           $(if ($forwarderRunning) { 'running' } else { 'unhealthy' }) - UDP $($Config.UdpHost):$($Config.UdpPort)"
+    return ($vmRunning -and $vmHealthy -and $forwarderRunning -and $grafanaRunning -and $grafanaHealthy)
 }
 
 function Invoke-Stop {
