@@ -469,8 +469,8 @@ function Start-Component {
 
     switch ($Name) {
         "victoriametrics" {
-            $home = Join-Path $script:RuntimeRoot "victoriametrics"
-            $exe = Join-Path $home "victoria-metrics-windows-amd64-prod.exe"
+            $componentHome = Join-Path $script:RuntimeRoot "victoriametrics"
+            $exe = Join-Path $componentHome "victoria-metrics-windows-amd64-prod.exe"
             $data = Join-Path $script:DataRoot "victoriametrics"
             $process = Start-LoggedProcess `
                 -Name $Name `
@@ -480,7 +480,7 @@ function Start-Component {
                     "-retentionPeriod=30d",
                     "-httpListenAddr=127.0.0.1:$($Config.VmPort)"
                 ) `
-                -WorkingDirectory $home
+                -WorkingDirectory $componentHome
             return $process
         }
         "forwarder" {
@@ -496,13 +496,13 @@ function Start-Component {
             return $process
         }
         "grafana" {
-            $home = Join-Path $script:RuntimeRoot "grafana"
-            $exe = Join-Path $home "bin\grafana.exe"
+            $componentHome = Join-Path $script:RuntimeRoot "grafana"
+            $exe = Join-Path $componentHome "bin\grafana.exe"
             $process = Start-LoggedProcess `
                 -Name $Name `
                 -FilePath $exe `
-                -Arguments @("server", "--homepath", (Quote-ProcessArgument $home)) `
-                -WorkingDirectory $home
+                -Arguments @("server", "--homepath", (Quote-ProcessArgument $componentHome)) `
+                -WorkingDirectory $componentHome
             return $process
         }
     }
