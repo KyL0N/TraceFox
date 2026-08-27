@@ -102,6 +102,42 @@ sudo docker compose up -d
 - **Grafana**：`http://<IP>:3000`（账号 `admin`，密码见 `.env` 中 `GRAFANA_PASSWORD`，请务必修改默认密码）
 - **Forwarder**：监听 UDP `:9000`
 
+### 2A. Windows 便携服务端（完全不使用 Docker）
+
+支持 Windows 10/11 和 Windows Server 2019+ x64。克隆仓库或解压发布包后，只需运行：
+
+```powershell
+.\tracefox.cmd start
+```
+
+不需要安装 Docker、Python、VictoriaMetrics 或 Grafana，也不会注册 Windows
+服务。第一次从源码目录启动时，会下载固定版本的 Windows 运行时并校验
+SHA256；包含运行时的发布包可以完全离线启动。启动成功后命令返回，三个组件
+由当前用户下的隐藏监督进程管理：
+
+首次下载约 280 MB，解压后的程序约占 850 MB；下载缓存会在校验和解压成功后
+自动删除，后续启动不会再次下载。
+
+- **VictoriaMetrics**：`http://127.0.0.1:8428`，仅监听本机
+- **Grafana**：`http://127.0.0.1:3000`
+- **Forwarder**：监听 UDP `0.0.0.0:9000`
+
+首次运行会生成随机 Grafana admin 密码并打印在终端，同时保存到
+`.tracefox/config.env`。历史数据、日志和下载的运行时都保存在仓库旁的
+`.tracefox/`，不会写入 `Program Files` 或注册表。
+
+便携模式不会设置开机启动；注销或重启 Windows 后再次执行同一个命令即可。
+辅助诊断命令：
+
+```powershell
+.\tracefox.cmd status
+.\tracefox.cmd stop
+```
+
+如果 Linux Agent 无法向 Windows 的 UDP 9000 上报，请在 Windows Defender
+防火墙弹窗中允许专用网络访问，或由管理员仅对可信局域网开放 UDP 9000。
+TCP 8428 不应对外开放。
+
 ### 3. 启动 Agent
 
 ```bash
@@ -181,6 +217,8 @@ python3 test_server.py              # 终端打印解析后的帧
 | `TRACEFOX_VM_URL` | VictoriaMetrics 地址 | `http://127.0.0.1:8428` |
 | `TRACEFOX_VERBOSE` | 详细日志（`0`/`1`） | `0` |
 | `TRACEFOX_QUEUE_SIZE` | Forwarder 内部队列大小 | `1000` |
+| `TRACEFOX_VM_PORT` | Windows Native 的 VictoriaMetrics 端口 | `8428` |
+| `TRACEFOX_GRAFANA_PORT` | Windows Native 的 Grafana 端口 | `3000` |
 | `GRAFANA_PASSWORD` | Grafana admin 密码 | `tracefox`（请修改） |
 
 ## 参与贡献
@@ -230,3 +268,4 @@ python3 test_server.py              # 终端打印解析后的帧
 - Grafana 匿名访问默认关闭，需登录后使用
 - 磁盘累计计数器使用 64 位，支持长时间运行和大容量设备
 - 文件系统使用率基于 `f_bavail`（普通用户可用空间），与 `df` 一致
+- Windows 便携模式目前只支持 x64；Agent 仍运行在被监控的 Linux 设备上

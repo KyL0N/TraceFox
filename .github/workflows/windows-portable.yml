@@ -1,0 +1,50 @@
+name: Windows Portable CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  portable-server:
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache pinned Windows runtimes
+        uses: actions/cache@v4
+        with:
+          path: .tracefox/runtime
+          key: tracefox-windows-runtime-${{ hashFiles('windows/runtime-manifest.psd1') }}
+
+      - name: Bootstrap portable runtime
+        shell: cmd
+        run: tracefox.cmd bootstrap
+
+      - name: Start portable server
+        shell: cmd
+        run: tracefox.cmd start
+
+      - name: Check portable status
+        shell: cmd
+        run: tracefox.cmd status
+
+      - name: Run end-to-end UDP to Grafana smoke test
+        shell: cmd
+        run: .tracefox\runtime\python\python.exe windows\smoke_test.py
+
+      - name: Stop portable server
+        if: always()
+        shell: cmd
+        run: tracefox.cmd stop
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracefox-windows-logs
+          path: .tracefox/logs
+          if-no-files-found: ignore

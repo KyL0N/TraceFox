@@ -1,0 +1,71 @@
+name: Windows Portable Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap pinned runtime
+        shell: cmd
+        run: tracefox.cmd bootstrap
+
+      - name: Assemble portable archive
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $env:GITHUB_REF_NAME
+          } else {
+            "dev-$env:GITHUB_RUN_NUMBER"
+          }
+          $stage = Join-Path $env:RUNNER_TEMP "tracefox-windows-amd64"
+          $archive = Join-Path $env:GITHUB_WORKSPACE "tracefox-server-$version-windows-amd64.zip"
+
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item tracefox.cmd, README.md, LICENSE, .env.example -Destination $stage
+          Copy-Item server, grafana, windows -Destination $stage -Recurse
+          New-Item -ItemType Directory -Path (Join-Path $stage ".tracefox") -Force | Out-Null
+          Copy-Item .tracefox/runtime -Destination (Join-Path $stage ".tracefox") -Recurse
+
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $archive -CompressionLevel Optimal
+          $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $name = Split-Path $archive -Leaf
+          [System.IO.File]::WriteAllText("$archive.sha256", "$hash  $name`n")
+
+          "TRACEFOX_ARCHIVE=$archive" | Out-File $env:GITHUB_ENV -Append
+          "TRACEFOX_CHECKSUM=$archive.sha256" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracefox-windows-amd64
+          path: |
+            ${{ env.TRACEFOX_ARCHIVE }}
+            ${{ env.TRACEFOX_CHECKSUM }}
+          if-no-files-found: error
+
+      - name: Publish tag assets
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME --verify-tag --generate-notes
+          }
+          gh release upload $env:GITHUB_REF_NAME `
+            $env:TRACEFOX_ARCHIVE `
+            $env:TRACEFOX_CHECKSUM `
+            --clobber
