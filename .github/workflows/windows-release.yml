@@ -9,6 +9,7 @@ on:
       - "v*"
     paths:
       - "VERSION"
+      - ".github/workflows/windows-release.yml"
 
 permissions:
   contents: write
