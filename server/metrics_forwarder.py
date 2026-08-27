@@ -154,6 +154,23 @@ def frame_to_prometheus(frame: dict, host: str) -> str:
         emit("tracefox_proc_cpu_pct", pl, pg["cpu_pct"])
         emit("tracefox_proc_rss_kb", pl, pg["rss_kb_sum"])
 
+    for tg in frame.get("thread_groups", []):
+        gl = {**hl, "group": tg["name"]}
+        emit("tracefox_proc_threads", gl, tg["total_threads"])
+        emit("tracefox_thread_collection_truncated", gl, int(tg["truncated"]))
+
+        for state, count in tg["states"].items():
+            sl = {**gl, "state": state}
+            emit("tracefox_thread_state_count", sl, count)
+
+        for thread in tg["top_threads"]:
+            tl = {**gl, "thread": thread["name"]}
+            if tg["include_tid"]:
+                tl["pid"] = thread["pid"]
+                tl["tid"] = thread["tid"]
+            emit("tracefox_thread_instances", tl, thread["inst_count"])
+            emit("tracefox_thread_cpu_pct", tl, thread["cpu_pct"])
+
     return "\n".join(lines) + "\n"
 
 

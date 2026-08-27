@@ -17,6 +17,19 @@ TF_TYPE_NET = 0x04
 TF_TYPE_DISK = 0x05
 TF_TYPE_FS = 0x06
 TF_TYPE_PROC = 0x07
+TF_TYPE_THREAD = 0x08
+
+TF_THREAD_FLAG_INCLUDE_TID = 0x01
+TF_THREAD_FLAG_TRUNCATED = 0x02
+TF_THREAD_STATES = (
+    "running",
+    "sleeping",
+    "disk_sleep",
+    "stopped",
+    "zombie",
+    "idle",
+    "other",
+)
 
 
 def parse_frame(payload: bytes) -> Dict[str, Any]:
@@ -191,5 +204,56 @@ def _parse_tlv_entries(
                     }
                 )
             result["proc_groups"] = groups
+
+        elif t == TF_TYPE_THREAD and length >= 34:
+            p = 0
+            name = val[p : p + 16].split(b"\x00", 1)[0].decode("ascii", "ignore")
+            p += 16
+            total_threads = struct.unpack(">H", val[p : p + 2])[0]
+            p += 2
+            flags = val[p]
+            p += 1
+
+            states = {}
+            for state_name in TF_THREAD_STATES:
+                states[state_name] = struct.unpack(">H", val[p : p + 2])[0]
+                p += 2
+
+            top_count = val[p]
+            p += 1
+            top_threads = []
+            for _ in range(top_count):
+                if p + 28 > len(val):
+                    break
+                thread_name = (
+                    val[p : p + 16]
+                    .split(b"\x00", 1)[0]
+                    .decode("ascii", "ignore")
+                )
+                p += 16
+                inst_count, cpu_x10 = struct.unpack(">HH", val[p : p + 4])
+                p += 4
+                pid, tid = struct.unpack(">II", val[p : p + 8])
+                p += 8
+                top_threads.append(
+                    {
+                        "name": thread_name,
+                        "inst_count": inst_count,
+                        "cpu_pct": cpu_x10 / 10.0,
+                        "pid": pid,
+                        "tid": tid,
+                    }
+                )
+
+            result.setdefault("thread_groups", []).append(
+                {
+                    "name": name,
+                    "total_threads": total_threads,
+                    "include_tid": bool(flags & TF_THREAD_FLAG_INCLUDE_TID),
+                    "truncated": bool(flags & TF_THREAD_FLAG_TRUNCATED),
+                    "states": states,
+                    "top_threads": top_threads,
+                }
+            )
 
     return result

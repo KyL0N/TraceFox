@@ -33,7 +33,7 @@ TraceFox/
 │   │   ├── net.c               网络接口计数器 (/proc/net/dev)
 │   │   ├── disk.c              磁盘 I/O 统计 (/proc/diskstats)
 │   │   ├── fs.c                文件系统用量 (statvfs)
-│   │   └── proc.c              进程组聚合 (按进程名前缀)
+│   │   └── proc.c              进程组聚合 + 受控线程采集
 │   └── config/agent.conf       Agent 配置文件（启动时自动读取）
 ├── server/                     服务端
 │   ├── tracefox_protocol.py    TLV v2 帧解析器（共享模块）
@@ -75,8 +75,11 @@ TLV 体：`Type(1) + Length(1) + Value(变长)`
 | `0x05` | 磁盘 | 每设备读写计数/扇区/延迟/IOPS/利用率 |
 | `0x06` | 文件系统 | 每挂载点 total_kb + used_pct |
 | `0x07` | 进程组 | 按名称聚合的实例数/CPU%/RSS |
+| `0x08` | 线程组 | 每进程组的线程总数、状态计数和 CPU Top-N；可选 PID/TID |
 
 单帧始终 < 1400 字节，避免 MTU 分片。
+
+`0x08` 使用独立 TLV，不改变现有 `0x07` 布局；不了解线程 TLV 的旧服务端会直接跳过它。每个进程组使用一个 `0x08` TLV，Agent 会在剩余帧预算不足时缩减 Top-N，并通过 `truncated` 指标暴露截断状态。
 
 ## 快速开始
 
@@ -154,7 +157,21 @@ TCP 8428 不应对外开放。
 # agent/config/agent.conf
 host_label=sunrise
 proc_prefix=node,iperf3
+thread_mode=top
+thread_top_n=5
+thread_include_tid=false
 ```
+
+线程采集严格限定在 `proc_prefix` 匹配的进程中。未配置 `proc_prefix` 时，进程和线程采集都不会启动。
+
+| 配置项 | 可选值 | 默认值 | 说明 |
+|------|------|------|------|
+| `proc_prefix` | 逗号分隔的进程名前缀 | 空 | 非空时启用进程和线程监控 |
+| `thread_mode` | `off` / `summary` / `top` | `top` | 关闭、只采集汇总、或额外上传 CPU Top-N |
+| `thread_top_n` | `1`–`7` | `5` | 每个进程组上传的线程/线程名 Top-N |
+| `thread_include_tid` | `true` / `false` | `false` | 按单线程上传 PID/TID；仅建议临时诊断使用 |
+
+默认模式按线程名聚合，例如多个名为 `decoder` 的线程合并为一条稳定时序；此时不会上传 PID/TID。开启 `thread_include_tid` 后，每个线程独立上报，会增加 VictoriaMetrics 时序基数。每个匹配进程最多扫描 512 个线程，超过限制会设置 `tracefox_thread_collection_truncated=1`。线程共享进程地址空间，因此不提供容易误导的“单线程 RSS”。
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
@@ -187,7 +204,8 @@ Agent 启动时按以下路径搜索配置文件：`config/agent.conf` → `agen
 - 网络吞吐量（收/发，正/负轴）
 - 磁盘延迟（await ms）
 - RAM 使用量 + 24h 线性预测
-- 进程组表格（按 RSS 排序）
+- 进程组 CPU / RSS
+- 线程总数、线程状态和线程 CPU Top-N
 
 支持 Host / Device / Interface 变量筛选和自定义时间范围。
 
@@ -231,7 +249,7 @@ python3 test_server.py              # 终端打印解析后的帧
 
 ## 指标列表
 
-所有指标以 `tracefox_` 为前缀，主要标签：`host`、`device`、`interface`、`mount`、`group`。
+所有指标以 `tracefox_` 为前缀，主要标签：`host`、`device`、`interface`、`mount`、`group`、`thread`。仅当 `thread_include_tid=true` 时，线程指标才包含 `pid` 和 `tid` 标签。
 
 | 指标 | 类型 | 说明 |
 |------|------|------|
@@ -262,6 +280,11 @@ python3 test_server.py              # 终端打印解析后的帧
 | `tracefox_proc_instances` | Gauge | 进程组实例数 |
 | `tracefox_proc_cpu_pct` | Gauge | 进程组 CPU 使用率（%） |
 | `tracefox_proc_rss_kb` | Gauge | 进程组 RSS 总和（KB） |
+| `tracefox_proc_threads` | Gauge | 进程组内线程总数 |
+| `tracefox_thread_state_count` | Gauge | 按调度状态统计的线程数 |
+| `tracefox_thread_instances` | Gauge | Top-N 条目聚合的同名线程数；TID 模式下为 1 |
+| `tracefox_thread_cpu_pct` | Gauge | Top-N 线程或同名线程组 CPU 使用率（%） |
+| `tracefox_thread_collection_truncated` | Gauge | 线程扫描或帧预算是否发生截断（0/1） |
 
 ## 部署说明
 

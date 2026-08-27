@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
@@ -51,8 +52,40 @@ static void config_defaults(struct agent_config *cfg)
 {
 	memset(cfg, 0, sizeof(*cfg));
 	strncpy(cfg->server_host, TF_DEFAULT_SERVER_HOST, sizeof(cfg->server_host) - 1);
-	cfg->server_port  = TF_DEFAULT_SERVER_PORT;
-	cfg->interval_sec = TF_DEFAULT_INTERVAL_SEC;
+	cfg->server_port        = TF_DEFAULT_SERVER_PORT;
+	cfg->interval_sec       = TF_DEFAULT_INTERVAL_SEC;
+	cfg->thread_mode        = TF_THREAD_MODE_TOP;
+	cfg->thread_top_n       = TF_DEFAULT_THREAD_TOP_N;
+	cfg->thread_include_tid = 0U;
+}
+
+static const char *thread_mode_name(uint8_t mode)
+{
+	switch (mode) {
+	case TF_THREAD_MODE_OFF: return "off";
+	case TF_THREAD_MODE_SUMMARY: return "summary";
+	case TF_THREAD_MODE_TOP: return "top";
+	default: return "invalid";
+	}
+}
+
+static int parse_bool_value(const char *value, uint8_t *result)
+{
+	if (!value || !result) {
+		return -1;
+	}
+
+	if (strcmp(value, "1") == 0 || strcasecmp(value, "true") == 0 || strcasecmp(value, "yes") == 0 || strcasecmp(value, "on") == 0) {
+		*result = 1U;
+		return 0;
+	}
+
+	if (strcmp(value, "0") == 0 || strcasecmp(value, "false") == 0 || strcasecmp(value, "no") == 0 || strcasecmp(value, "off") == 0) {
+		*result = 0U;
+		return 0;
+	}
+
+	return -1;
 }
 
 static int is_ascii_safe(const char *value)
@@ -258,6 +291,39 @@ static int load_config_file(const char *path, struct agent_config *cfg)
 				prefix = strtok_r(NULL, ",", &saveptr);
 			}
 		}
+		else if (strcmp(key, "thread_mode") == 0) {
+			if (strcasecmp(val, "off") == 0) {
+				cfg->thread_mode = TF_THREAD_MODE_OFF;
+			}
+			else if (strcasecmp(val, "summary") == 0) {
+				cfg->thread_mode = TF_THREAD_MODE_SUMMARY;
+			}
+			else if (strcasecmp(val, "top") == 0) {
+				cfg->thread_mode = TF_THREAD_MODE_TOP;
+			}
+			else {
+				TF_LOG_WARN("[config] invalid thread_mode at line %u: %s (expected off, summary, or top)", line_no, val);
+			}
+		}
+		else if (strcmp(key, "thread_top_n") == 0) {
+			errno  = 0;
+			parsed = strtol(val, NULL, 10);
+			if (errno == 0 && parsed > 0 && parsed <= TF_MAX_THREAD_TOP_N) {
+				cfg->thread_top_n = (uint8_t)parsed;
+			}
+			else {
+				TF_LOG_WARN("[config] invalid thread_top_n at line %u: %s (expected 1-%d)", line_no, val, TF_MAX_THREAD_TOP_N);
+			}
+		}
+		else if (strcmp(key, "thread_include_tid") == 0) {
+			uint8_t enabled = 0U;
+			if (parse_bool_value(val, &enabled) == 0) {
+				cfg->thread_include_tid = enabled;
+			}
+			else {
+				TF_LOG_WARN("[config] invalid thread_include_tid at line %u: %s (expected true or false)", line_no, val);
+			}
+		}
 	}
 
 	(void)fclose(config_fp);
@@ -266,8 +332,9 @@ static int load_config_file(const char *path, struct agent_config *cfg)
 
 static void print_effective_config(const struct agent_config *cfg)
 {
-	TF_LOG_DBG("[config] effective: server_host=%s server_port=%u interval=%u host_label=%s", cfg->server_host,
-	           (unsigned)cfg->server_port, (unsigned)cfg->interval_sec, cfg->host_label[0] != '\0' ? cfg->host_label : "<unset>");
+	TF_LOG_DBG("[config] effective: server_host=%s server_port=%u interval=%u host_label=%s thread_mode=%s thread_top_n=%u thread_include_tid=%s",
+	           cfg->server_host, (unsigned)cfg->server_port, (unsigned)cfg->interval_sec, cfg->host_label[0] != '\0' ? cfg->host_label : "<unset>",
+	           thread_mode_name(cfg->thread_mode), (unsigned)cfg->thread_top_n, cfg->thread_include_tid ? "true" : "false");
 }
 
 static void config_init_from_sources(int argc, char **argv, struct agent_config *cfg)

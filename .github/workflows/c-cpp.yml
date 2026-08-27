@@ -66,6 +66,11 @@ jobs:
         run: |
           python3 -m pytest server/test_protocol.py -v
 
+      - name: Run Agent Thread Capture Smoke Test
+        run: |
+          make -C agent MODE=debug
+          python3 agent/test_thread_capture.py
+
       - name: Validate Docker Compose and Grafana Config
         run: |
           python3 - <<'PY'

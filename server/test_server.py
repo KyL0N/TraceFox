@@ -34,6 +34,7 @@ def print_summary(frame: Dict[str, Any]) -> None:
     disks = frame.get("disk", [])
     fs_list = frame.get("fs", [])
     proc_groups = frame.get("proc_groups", [])
+    thread_groups = frame.get("thread_groups", [])
 
     print(f"==== frame ts={ts} seq={seq} ====")
 
@@ -117,6 +118,25 @@ def print_summary(frame: Dict[str, Any]) -> None:
                 f"cpu={g['cpu_pct']:.1f}% rss_sum={g['rss_kb_sum']} kB"
             )
 
+    if thread_groups:
+        print(f"THREAD: groups={len(thread_groups)}")
+        for group in thread_groups:
+            states = ",".join(
+                f"{state}={count}" for state, count in group["states"].items()
+            )
+            print(
+                f"  - {group['name']}: total={group['total_threads']} "
+                f"states({states}) truncated={group['truncated']}"
+            )
+            for thread in group["top_threads"]:
+                identity = ""
+                if group["include_tid"]:
+                    identity = f" pid={thread['pid']} tid={thread['tid']}"
+                print(
+                    f"      {thread['name']}: inst={thread['inst_count']} "
+                    f"cpu={thread['cpu_pct']:.1f}%{identity}"
+                )
+
 
 def main() -> None:
     host = "0.0.0.0"
@@ -147,4 +167,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

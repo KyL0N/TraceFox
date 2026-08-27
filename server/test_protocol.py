@@ -14,7 +14,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from tracefox_protocol import parse_frame, TF_MAGIC, TF_VERSION
 from tracefox_protocol import TF_TYPE_CPU, TF_TYPE_MEM, TF_TYPE_NET
-from tracefox_protocol import TF_TYPE_DISK, TF_TYPE_FS, TF_TYPE_HOST_LABEL, TF_TYPE_PROC
+from tracefox_protocol import (
+    TF_TYPE_DISK,
+    TF_TYPE_FS,
+    TF_TYPE_HOST_LABEL,
+    TF_TYPE_PROC,
+    TF_TYPE_THREAD,
+)
 
 
 def _make_header(ts=1000000, seq=1):
@@ -23,6 +29,23 @@ def _make_header(ts=1000000, seq=1):
 
 def _make_tlv(typ, payload):
     return struct.pack(">BB", typ, len(payload)) + payload
+
+
+def _make_thread_payload(
+    group="rtcaster",
+    total=4,
+    flags=0,
+    states=(1, 2, 0, 0, 0, 1, 0),
+    threads=(),
+):
+    payload = group.encode("ascii").ljust(16, b"\x00")
+    payload += struct.pack(">HB", total, flags)
+    payload += struct.pack(">HHHHHHH", *states)
+    payload += struct.pack(">B", len(threads))
+    for name, instances, cpu_x10, pid, tid in threads:
+        payload += name.encode("ascii").ljust(16, b"\x00")
+        payload += struct.pack(">HHII", instances, cpu_x10, pid, tid)
+    return payload
 
 
 def test_empty_payload():
@@ -177,6 +200,106 @@ def test_proc_tlv():
     assert pg["inst_count"] == 3
     assert pg["cpu_pct"] == 12.5
     assert pg["rss_kb_sum"] == 65536
+
+
+def test_thread_summary_tlv():
+    payload = _make_thread_payload()
+    frame = _make_header() + _make_tlv(TF_TYPE_THREAD, payload)
+    result = parse_frame(frame)
+    assert len(result["thread_groups"]) == 1
+    group = result["thread_groups"][0]
+    assert group["name"] == "rtcaster"
+    assert group["total_threads"] == 4
+    assert group["include_tid"] is False
+    assert group["truncated"] is False
+    assert group["states"] == {
+        "running": 1,
+        "sleeping": 2,
+        "disk_sleep": 0,
+        "stopped": 0,
+        "zombie": 0,
+        "idle": 1,
+        "other": 0,
+    }
+    assert group["top_threads"] == []
+
+
+def test_thread_top_tlv_with_tid():
+    payload = _make_thread_payload(
+        total=3,
+        flags=0x03,
+        states=(1, 2, 0, 0, 0, 0, 0),
+        threads=(
+            ("decoder", 1, 623, 101, 105),
+            ("rtsp-reader", 1, 181, 101, 106),
+        ),
+    )
+    frame = _make_header() + _make_tlv(TF_TYPE_THREAD, payload)
+    group = parse_frame(frame)["thread_groups"][0]
+    assert group["include_tid"] is True
+    assert group["truncated"] is True
+    assert group["top_threads"] == [
+        {
+            "name": "decoder",
+            "inst_count": 1,
+            "cpu_pct": 62.3,
+            "pid": 101,
+            "tid": 105,
+        },
+        {
+            "name": "rtsp-reader",
+            "inst_count": 1,
+            "cpu_pct": 18.1,
+            "pid": 101,
+            "tid": 106,
+        },
+    ]
+
+
+def test_repeated_thread_tlvs_are_accumulated():
+    frame = (
+        _make_header()
+        + _make_tlv(TF_TYPE_THREAD, _make_thread_payload(group="rtcaster"))
+        + _make_tlv(TF_TYPE_THREAD, _make_thread_payload(group="mediamtx"))
+    )
+    groups = parse_frame(frame)["thread_groups"]
+    assert [group["name"] for group in groups] == ["rtcaster", "mediamtx"]
+
+
+def test_thread_metrics_without_tid_labels():
+    from metrics_forwarder import frame_to_prometheus
+
+    payload = _make_thread_payload(
+        threads=(("decoder", 2, 623, 101, 105),),
+    )
+    frame = parse_frame(_make_header(ts=1000) + _make_tlv(TF_TYPE_THREAD, payload))
+    body = frame_to_prometheus(frame, "edge-a")
+    assert 'tracefox_proc_threads{host="edge-a",group="rtcaster"} 4 1000000' in body
+    assert (
+        'tracefox_thread_state_count{host="edge-a",group="rtcaster",state="running"} '
+        '1 1000000' in body
+    )
+    assert (
+        'tracefox_thread_cpu_pct{host="edge-a",group="rtcaster",thread="decoder"} '
+        '62.3 1000000' in body
+    )
+    assert 'pid=' not in body
+    assert 'tid=' not in body
+
+
+def test_thread_metrics_with_tid_labels():
+    from metrics_forwarder import frame_to_prometheus
+
+    payload = _make_thread_payload(
+        flags=0x01,
+        threads=(("decoder", 1, 623, 101, 105),),
+    )
+    frame = parse_frame(_make_header(ts=1000) + _make_tlv(TF_TYPE_THREAD, payload))
+    body = frame_to_prometheus(frame, "edge-a")
+    assert (
+        'tracefox_thread_cpu_pct{host="edge-a",group="rtcaster",thread="decoder",'
+        'pid="101",tid="105"} 62.3 1000000' in body
+    )
 
 
 def test_multiple_tlvs():

@@ -14,6 +14,12 @@
 #define TF_MAX_PROC        10
 #define TF_PROC_TRACK      64
 #define TF_MAX_PROC_GROUPS 8
+#define TF_THREAD_TRACK    1024
+#define TF_THREAD_SCAN_LIMIT_PER_PID 512
+#define TF_THREAD_CANDIDATES 512
+#define TF_MAX_THREAD_TOP_N 7
+#define TF_DEFAULT_THREAD_TOP_N 5
+#define TF_THREAD_STATE_COUNT 7
 
 #define TF_MAX_PAYLOAD_SIZE 1024
 
@@ -36,6 +42,8 @@
 #define TF_DISK_ENTRY_PAYLOAD_LEN 66
 #define TF_FS_ENTRY_PAYLOAD_LEN   26
 #define TF_PROC_GROUP_PAYLOAD_LEN 24
+#define TF_THREAD_GROUP_HEADER_PAYLOAD_LEN 34
+#define TF_THREAD_ENTRY_PAYLOAD_LEN        28
 
 /* 发送/文件缓冲与帧头 */
 #define TF_FRAME_BUF_SIZE  1400
@@ -86,9 +94,29 @@
 #define TF_TYPE_DISK       0x05
 #define TF_TYPE_FS         0x06
 #define TF_TYPE_PROC       0x07
+#define TF_TYPE_THREAD     0x08
+
+#define TF_THREAD_FLAG_INCLUDE_TID 0x01U
+#define TF_THREAD_FLAG_TRUNCATED   0x02U
 
 #define TF_MAX_COMM_PREFIX 32
 #define TF_COMM_PREFIX_LEN 32
+
+enum tf_thread_mode {
+	TF_THREAD_MODE_OFF = 0,
+	TF_THREAD_MODE_SUMMARY,
+	TF_THREAD_MODE_TOP,
+};
+
+enum tf_thread_state {
+	TF_THREAD_STATE_RUNNING = 0,
+	TF_THREAD_STATE_SLEEPING,
+	TF_THREAD_STATE_DISK_SLEEP,
+	TF_THREAD_STATE_STOPPED,
+	TF_THREAD_STATE_ZOMBIE,
+	TF_THREAD_STATE_IDLE,
+	TF_THREAD_STATE_OTHER,
+};
 
 /* Log levels (lower value = higher severity) */
 enum tf_log_level {
@@ -128,6 +156,9 @@ struct agent_config
 	char host_label[TF_HOST_LABEL_SIZE];
 	char proc_prefixes[TF_MAX_COMM_PREFIX][TF_COMM_PREFIX_LEN];
 	size_t proc_prefix_count;
+	uint8_t thread_mode;
+	uint8_t thread_top_n;
+	uint8_t thread_include_tid;
 };
 
 struct cpu_payload
@@ -196,6 +227,31 @@ struct proc_payload
 {
 	uint8_t group_count;
 	struct proc_group_entry groups[TF_MAX_PROC_GROUPS];
+};
+
+struct thread_top_entry
+{
+	char name[TF_PROC_NAME_SIZE];
+	uint16_t inst_count;
+	uint16_t cpu_pct_x10;
+	uint32_t pid;
+	uint32_t tid;
+};
+
+struct thread_group_entry
+{
+	char name[TF_PROC_NAME_SIZE];
+	uint16_t total_threads;
+	uint8_t flags;
+	uint16_t state_counts[TF_THREAD_STATE_COUNT];
+	uint8_t top_count;
+	struct thread_top_entry top[TF_MAX_THREAD_TOP_N];
+};
+
+struct thread_payload
+{
+	uint8_t group_count;
+	struct thread_group_entry groups[TF_MAX_PROC_GROUPS];
 };
 
 struct tlv_writer
