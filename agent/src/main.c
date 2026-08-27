@@ -48,6 +48,42 @@ static void handle_signal(int sig)
 	}
 }
 
+static int timespec_compare(const struct timespec *left, const struct timespec *right)
+{
+	if (left->tv_sec < right->tv_sec) return -1;
+	if (left->tv_sec > right->tv_sec) return 1;
+	if (left->tv_nsec < right->tv_nsec) return -1;
+	if (left->tv_nsec > right->tv_nsec) return 1;
+	return 0;
+}
+
+static int wait_for_next_sample(struct timespec *deadline, unsigned int interval_sec)
+{
+	struct timespec now = { 0 };
+
+	deadline->tv_sec += (time_t)interval_sec;
+	if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+		return errno != 0 ? errno : EINVAL;
+	}
+
+	if (timespec_compare(deadline, &now) <= 0) {
+		*deadline = now;
+		deadline->tv_sec += (time_t)interval_sec;
+	}
+
+	while (keep_running && !reload_config_flag) {
+		int rc = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, deadline, NULL);
+		if (rc == 0) {
+			return 0;
+		}
+		if (rc != EINTR) {
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
 static void config_defaults(struct agent_config *cfg)
 {
 	memset(cfg, 0, sizeof(*cfg));
@@ -485,6 +521,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	struct timespec next_sample = { 0 };
+	if (clock_gettime(CLOCK_MONOTONIC, &next_sample) != 0) {
+		TF_LOG_ERR("clock_gettime(CLOCK_MONOTONIC): %s", strerror(errno));
+		destroy_agent_state();
+		return 1;
+	}
+
 	while (keep_running) {
 		if (reload_config_flag) {
 			reload_config_flag = 0;
@@ -495,24 +538,11 @@ int main(int argc, char **argv)
 				return 1;
 			}
 			TF_LOG_INFO("Configuration reloaded successfully");
+			if (clock_gettime(CLOCK_MONOTONIC, &next_sample) != 0) {
+				TF_LOG_ERR("clock_gettime(CLOCK_MONOTONIC): %s", strerror(errno));
+				break;
+			}
 			continue;
-		}
-
-		uint32_t timestamp = (uint32_t)time(NULL);
-
-		if (tlv_init(&writer, buffer, sizeof(buffer), timestamp, seq++) != 0) {
-			break;
-		}
-
-		if (cfg.host_label[0] != '\0') {
-			size_t host_label_len = strnlen(cfg.host_label, sizeof(cfg.host_label));
-			if (host_label_len > (size_t)UINT8_MAX) {
-				host_label_len = (size_t)UINT8_MAX;
-			}
-
-			if (tlv_put(&writer, TF_TYPE_HOST_LABEL, cfg.host_label, (uint8_t)host_label_len) != 0) {
-				TF_LOG_WARN("[host] failed to append host label TLV");
-			}
 		}
 
 		unsigned long push_errors  = 0;
@@ -525,6 +555,22 @@ int main(int argc, char **argv)
 				if (err != 0) {
 					TF_LOG_DBG("[%s] collect failed with err: %d", col->name, err);
 				}
+			}
+		}
+
+		uint32_t timestamp = (uint32_t)time(NULL);
+		if (tlv_init(&writer, buffer, sizeof(buffer), timestamp, seq++) != 0) {
+			break;
+		}
+
+		if (cfg.host_label[0] != '\0') {
+			size_t host_label_len = strnlen(cfg.host_label, sizeof(cfg.host_label));
+			if (host_label_len > (size_t)UINT8_MAX) {
+				host_label_len = (size_t)UINT8_MAX;
+			}
+
+			if (tlv_put(&writer, TF_TYPE_HOST_LABEL, cfg.host_label, (uint8_t)host_label_len) != 0) {
+				TF_LOG_WARN("[host] failed to append host label TLV");
 			}
 		}
 
@@ -564,10 +610,11 @@ int main(int argc, char **argv)
 				push_errors++;
 			}
 		}
-		
-		unsigned int sleep_left = cfg.interval_sec;
-		while (sleep_left > 0 && keep_running && !reload_config_flag) {
-			sleep_left = sleep(sleep_left);
+
+		int wait_rc = wait_for_next_sample(&next_sample, cfg.interval_sec);
+		if (wait_rc != 0) {
+			TF_LOG_ERR("clock_nanosleep(CLOCK_MONOTONIC): %s", strerror(wait_rc));
+			break;
 		}
 	}
 

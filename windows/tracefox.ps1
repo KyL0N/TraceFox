@@ -522,7 +522,7 @@ function Start-Component {
                 -Arguments @(
                     (Quote-ProcessArgument "-storageDataPath=$data"),
                     "-retentionPeriod=30d",
-                    "-search.latencyOffset=5s",
+                    "-search.latencyOffset=1s",
                     "-httpListenAddr=127.0.0.1:$($Config.VmPort)"
                 ) `
                 -WorkingDirectory $componentHome

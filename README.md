@@ -105,6 +105,10 @@ sudo docker compose up -d
 - **Grafana**：`http://<IP>:3000`（账号 `admin`，密码见 `.env` 中 `GRAFANA_PASSWORD`，请务必修改默认密码）
 - **Forwarder**：监听 UDP `:9000`
 
+默认 Agent 每 5 秒采集一次，VictoriaMetrics 最近样本查询偏移为 1 秒，
+Grafana Dashboard 每 2 秒刷新一次。数据进入服务端后通常会在数秒内显示；
+Grafana 数据源的 5 秒采集间隔用于正确计算 rate 查询窗口，不等同于页面刷新频率。
+
 ### 2A. Windows 便携服务端（完全不使用 Docker）
 
 支持 Windows 10/11 和 Windows Server 2019+ x64。克隆仓库或解压发布包后，只需运行：

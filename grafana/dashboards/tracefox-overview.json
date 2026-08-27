@@ -30,7 +30,9 @@
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
           "expr": "tracefox_uptime_seconds{host=~\"$host\"}",
           "legendFormat": "{{ host }}",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -67,7 +69,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_fs_used_pct{host=~\"$host\"}[$__interval])",
+          "expr": "tracefox_fs_used_pct{host=~\"$host\"}",
           "legendFormat": "{{ mount }}",
           "refId": "A"
         }
@@ -160,31 +162,31 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_cpu_user_pct{host=~\"$host\"}[$__interval])",
+          "expr": "tracefox_cpu_user_pct{host=~\"$host\"}",
           "legendFormat": "{{ host }} user",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_cpu_system_pct{host=~\"$host\"}[$__interval])",
+          "expr": "tracefox_cpu_system_pct{host=~\"$host\"}",
           "legendFormat": "{{ host }} system",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_cpu_iowait_pct{host=~\"$host\"}[$__interval])",
+          "expr": "tracefox_cpu_iowait_pct{host=~\"$host\"}",
           "legendFormat": "{{ host }} iowait",
           "refId": "C"
         },
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_cpu_irq_pct{host=~\"$host\"}[$__interval])",
+          "expr": "tracefox_cpu_irq_pct{host=~\"$host\"}",
           "legendFormat": "{{ host }} irq",
           "refId": "D"
         },
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_cpu_user_pct{host=~\"$host\"}[$__interval]) + avg_over_time(tracefox_cpu_system_pct{host=~\"$host\"}[$__interval]) + avg_over_time(tracefox_cpu_iowait_pct{host=~\"$host\"}[$__interval]) + avg_over_time(tracefox_cpu_irq_pct{host=~\"$host\"}[$__interval])",
+          "expr": "tracefox_cpu_user_pct{host=~\"$host\"} + tracefox_cpu_system_pct{host=~\"$host\"} + tracefox_cpu_iowait_pct{host=~\"$host\"} + tracefox_cpu_irq_pct{host=~\"$host\"}",
           "legendFormat": "{{ host }} total",
           "refId": "E"
         }
@@ -249,19 +251,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "(avg_over_time(tracefox_mem_total_kb{host=~\"$host\"}[$__interval]) - avg_over_time(tracefox_mem_available_kb{host=~\"$host\"}[$__interval])) / 1048576",
+          "expr": "(tracefox_mem_total_kb{host=~\"$host\"} - tracefox_mem_available_kb{host=~\"$host\"}) / 1048576",
           "legendFormat": "{{ host }} used",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "(avg_over_time(tracefox_mem_available_kb{host=~\"$host\"}[$__interval]) - avg_over_time(tracefox_mem_free_kb{host=~\"$host\"}[$__interval])) / 1048576",
+          "expr": "(tracefox_mem_available_kb{host=~\"$host\"} - tracefox_mem_free_kb{host=~\"$host\"}) / 1048576",
           "legendFormat": "{{ host }} buffers/cache",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_mem_free_kb{host=~\"$host\"}[$__interval]) / 1048576",
+          "expr": "tracefox_mem_free_kb{host=~\"$host\"} / 1048576",
           "legendFormat": "{{ host }} free",
           "refId": "C"
         }
@@ -444,7 +446,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_mem_available_kb{host=~\"$host\"}[$__interval]) / 1048576",
+          "expr": "tracefox_mem_available_kb{host=~\"$host\"} / 1048576",
           "legendFormat": "{{ host }} MemAvailable",
           "refId": "A"
         },
@@ -506,7 +508,9 @@
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
           "expr": "tracefox_cpu_user_pct{host=~\"$host\"} + tracefox_cpu_system_pct{host=~\"$host\"}",
           "legendFormat": "{{ host }}",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -544,7 +548,9 @@
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
           "expr": "tracefox_mem_used_pct{host=~\"$host\"}",
           "legendFormat": "{{ host }}",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -582,7 +588,9 @@
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
           "expr": "tracefox_load_1m{host=~\"$host\"}",
           "legendFormat": "{{ host }}",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -620,7 +628,9 @@
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
           "expr": "max(tracefox_disk_io_util_pct{host=~\"$host\"}) by (host)",
           "legendFormat": "{{ host }}",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -660,7 +670,8 @@
           "expr": "tracefox_fs_used_pct{host=~\"$host\"}",
           "legendFormat": "{{ host }}:{{ mount }}",
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -702,19 +713,25 @@
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
           "expr": "tracefox_load_1m{host=~\"$host\"}",
           "legendFormat": "1m",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         },
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
           "expr": "tracefox_load_5m{host=~\"$host\"}",
           "legendFormat": "5m",
-          "refId": "B"
+          "refId": "B",
+          "instant": true,
+          "range": false
         },
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
           "expr": "tracefox_load_15m{host=~\"$host\"}",
           "legendFormat": "15m",
-          "refId": "C"
+          "refId": "C",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -761,7 +778,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_proc_cpu_pct{host=~\"$host\",group=~\"$procgroup\"}[$__interval])",
+          "expr": "tracefox_proc_cpu_pct{host=~\"$host\",group=~\"$procgroup\"}",
           "legendFormat": "{{ group }}",
           "refId": "A"
         }
@@ -801,7 +818,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_proc_rss_kb{host=~\"$host\",group=~\"$procgroup\"}[$__interval]) / 1024",
+          "expr": "tracefox_proc_rss_kb{host=~\"$host\",group=~\"$procgroup\"} / 1024",
           "legendFormat": "{{ group }}",
           "refId": "A"
         }
@@ -848,7 +865,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_proc_threads{host=~\"$host\",group=~\"$procgroup\"}[$__interval])",
+          "expr": "tracefox_proc_threads{host=~\"$host\",group=~\"$procgroup\"}",
           "legendFormat": "{{ group }}",
           "refId": "A"
         }
@@ -888,7 +905,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_thread_cpu_pct{host=~\"$host\",group=~\"$procgroup\"}[$__interval])",
+          "expr": "tracefox_thread_cpu_pct{host=~\"$host\",group=~\"$procgroup\"}",
           "legendFormat": "{{ group }} / {{ thread }}",
           "refId": "A"
         }
@@ -927,7 +944,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-          "expr": "avg_over_time(tracefox_thread_state_count{host=~\"$host\",group=~\"$procgroup\"}[$__interval])",
+          "expr": "tracefox_thread_state_count{host=~\"$host\",group=~\"$procgroup\"}",
           "legendFormat": "{{ group }} / {{ state }}",
           "refId": "A"
         }
@@ -958,7 +975,7 @@
       }
     }
   ],
-  "refresh": "5s",
+  "refresh": "2s",
   "schemaVersion": 39,
   "tags": ["tracefox", "embedded", "monitoring"],
   "templating": {
@@ -1015,7 +1032,7 @@
   },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {
-    "refresh_intervals": [ "1s", "5s", "10s", "30s", "1m", "5m", "15m"],
+    "refresh_intervals": [ "1s", "2s", "5s", "10s", "30s", "1m", "5m", "15m"],
     "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
   },
   "timezone": "",

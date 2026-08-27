@@ -2,6 +2,7 @@
 """End-to-end smoke test for the Windows portable server."""
 
 import json
+import os
 import socket
 import struct
 import time
@@ -9,7 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 
 
-HOST_LABEL = "windows-portable-smoke"
+HOST_LABEL = f"windows-portable-smoke-{os.getpid()}"
 
 
 def make_frame() -> bytes:
@@ -28,9 +29,7 @@ def get_json(url: str) -> dict:
 
 def wait_for_metric(timeout: float = 30.0) -> None:
     query = f'tracefox_up{{host="{HOST_LABEL}"}}'
-    url = "http://127.0.0.1:8428/api/v1/query?" + urlencode(
-        {"query": query, "latency_offset": "1s"}
-    )
+    url = "http://127.0.0.1:8428/api/v1/query?" + urlencode({"query": query})
     deadline = time.monotonic() + timeout
     last_payload = None
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -39,8 +38,12 @@ def wait_for_metric(timeout: float = 30.0) -> None:
             try:
                 last_payload = get_json(url)
                 results = last_payload.get("data", {}).get("result", [])
-                if results and results[0].get("value", [None, None])[1] == "1":
-                    return
+                if results:
+                    sample = results[0].get("value", [None, None])
+                    if sample[1] == "1":
+                        sample_age = time.time() - float(sample[0])
+                        if 0 <= sample_age <= 10:
+                            return
             except OSError:
                 pass
             time.sleep(1)

@@ -402,6 +402,23 @@ def test_sender_retries_same_payload_before_dequeueing_next():
     assert calls == ["body-1", "body-1", "body-2"]
 
 
+def test_full_forwarder_queue_keeps_newest_payloads():
+    import queue
+    import metrics_forwarder
+
+    q = queue.Queue(maxsize=2)
+    q.put("body-1")
+    q.put("body-2")
+    original_stats = metrics_forwarder._stats.copy()
+    metrics_forwarder._stats.update(drops=0)
+    try:
+        metrics_forwarder.enqueue_latest(q, "body-3")
+        assert [q.get_nowait(), q.get_nowait()] == ["body-2", "body-3"]
+        assert metrics_forwarder._stats["drops"] == 1
+    finally:
+        metrics_forwarder._stats.update(original_stats)
+
+
 if __name__ == "__main__":
     test_funcs = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0

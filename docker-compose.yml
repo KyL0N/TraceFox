@@ -20,6 +20,7 @@ services:
       - vm-data:/victoria-metrics-data
     command:
       - "-retentionPeriod=30d"
+      - "-search.latencyOffset=1s"
       - "-httpListenAddr=:8428"
     restart: unless-stopped
 

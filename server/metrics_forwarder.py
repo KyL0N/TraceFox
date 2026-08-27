@@ -220,17 +220,38 @@ def receiver_thread(sock: socket.socket, q: queue.Queue) -> None:
                 body.count("\n"),
             )
 
-        try:
-            q.put_nowait(body)
-        except queue.Full:
-            with _stats_lock:
-                _stats["drops"] += 1
-            if _stats["drops"] % 100 == 1:
-                log.warning(
-                    "Queue full (size=%d), dropping frame (total drops=%d)",
-                    QUEUE_SIZE,
-                    _stats["drops"],
-                )
+        enqueue_latest(q, body)
+
+
+def enqueue_latest(q: queue.Queue, body: str) -> None:
+    """Keep the newest telemetry when the bounded queue is full."""
+    try:
+        q.put_nowait(body)
+        return
+    except queue.Full:
+        pass
+
+    evicted = False
+    try:
+        q.get_nowait()
+        evicted = True
+    except queue.Empty:
+        pass
+
+    q.put_nowait(body)
+
+    if not evicted:
+        return
+
+    with _stats_lock:
+        _stats["drops"] += 1
+        drops = _stats["drops"]
+    if drops % 100 == 1:
+        log.warning(
+            "Queue full (size=%d), evicting oldest frame (total drops=%d)",
+            q.maxsize,
+            drops,
+        )
 
 
 def sender_thread(q: queue.Queue) -> None:

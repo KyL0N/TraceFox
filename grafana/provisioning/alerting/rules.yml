@@ -85,7 +85,7 @@ groups:
             model:
               refId: A
               expr: "tracefox_mem_used_pct"
-              intervalMs: 1000
+              intervalMs: 5000
               maxDataPoints: 120
           - refId: B
             relativeTimeRange:
@@ -143,7 +143,7 @@ groups:
             model:
               refId: A
               expr: "tracefox_disk_io_util_pct"
-              intervalMs: 1000
+              intervalMs: 5000
               maxDataPoints: 120
           - refId: B
             relativeTimeRange:
@@ -201,7 +201,7 @@ groups:
             model:
               refId: A
               expr: "tracefox_fs_used_pct"
-              intervalMs: 1000
+              intervalMs: 5000
               maxDataPoints: 120
           - refId: B
             relativeTimeRange:
@@ -259,7 +259,7 @@ groups:
             model:
               refId: A
               expr: "tracefox_up"
-              intervalMs: 1000
+              intervalMs: 5000
               maxDataPoints: 24
           - refId: B
             relativeTimeRange:

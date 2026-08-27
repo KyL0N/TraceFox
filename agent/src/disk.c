@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "tracefox.h"
 
@@ -23,6 +24,8 @@ struct disk_ctx
 	struct disk_entry entries[TF_MAX_DISKS];
 	size_t count;
 	int truncated;
+	struct timespec last_sample_time;
+	int sample_time_initialized;
 };
 
 static int is_partition_name(const char *name)
@@ -95,8 +98,23 @@ static void disk_destroy(struct tf_collector *col)
 static int disk_collect(struct disk_ctx *ctx, const struct agent_config *cfg)
 {
 	uint16_t interval_sec = cfg->interval_sec;
+	struct timespec sample_time = { 0 };
+	int have_sample_time = clock_gettime(CLOCK_MONOTONIC, &sample_time) == 0;
+	unsigned long long elapsed_ms = (unsigned long long)interval_sec * 1000ULL;
 	if (interval_sec == 0) {
 		interval_sec = 1;
+		elapsed_ms = 1000ULL;
+	}
+
+	if (have_sample_time && ctx->sample_time_initialized) {
+		int64_t elapsed_ns = ((int64_t)sample_time.tv_sec - (int64_t)ctx->last_sample_time.tv_sec) * 1000000000LL
+		                     + ((int64_t)sample_time.tv_nsec - (int64_t)ctx->last_sample_time.tv_nsec);
+		if (elapsed_ns > 0) {
+			elapsed_ms = (unsigned long long)elapsed_ns / 1000000ULL;
+			if (elapsed_ms == 0ULL) {
+				elapsed_ms = 1ULL;
+			}
+		}
 	}
 
 	FILE *disk_fp = fopen("/proc/diskstats", "r");
@@ -177,8 +195,8 @@ static int disk_collect(struct disk_ctx *ctx, const struct agent_config *cfg)
 			entry->write_iops_delta = (uint32_t)(diff_writes > 0 ? diff_writes : 0);
 
 			if (diff_io_ticks > 0) {
-				/* io_ticks 是毫秒；util_x10 = busy_ms / interval_sec，最大 100.0% → TF_PCT10_MAX */
-				unsigned long long pct10 = diff_io_ticks / (unsigned long long)interval_sec;
+				/* io_ticks 是毫秒；按两次采样的真实单调时钟间隔计算 0.1% 单位利用率。 */
+				unsigned long long pct10 = (diff_io_ticks * 1000ULL) / elapsed_ms;
 
 				if (pct10 > (unsigned long long)TF_PCT10_MAX) {
 					pct10 = (unsigned long long)TF_PCT10_MAX;
@@ -200,6 +218,10 @@ static int disk_collect(struct disk_ctx *ctx, const struct agent_config *cfg)
 
 	(void)fclose(disk_fp);
 	ctx->count = idx;
+	if (have_sample_time) {
+		ctx->last_sample_time = sample_time;
+		ctx->sample_time_initialized = 1;
+	}
 	return 0;
 }
 
