@@ -3,8 +3,12 @@ name: Windows Portable Release
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "main"
     tags:
       - "v*"
+    paths:
+      - "VERSION"
 
 permissions:
   contents: write
@@ -17,6 +21,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve release version
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $env:GITHUB_REF_NAME
+          } else {
+            (Get-Content VERSION -Raw).Trim()
+          }
+          if ($version -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
+            throw "VERSION must be a semantic version beginning with v; got '$version'."
+          }
+          "TRACEFOX_VERSION=$version" | Out-File $env:GITHUB_ENV -Append
+
       - name: Bootstrap pinned runtime
         shell: cmd
         run: tracefox.cmd bootstrap
@@ -24,13 +41,8 @@ jobs:
       - name: Assemble portable archive
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq "tag") {
-            $env:GITHUB_REF_NAME
-          } else {
-            "dev-$env:GITHUB_RUN_NUMBER"
-          }
           $stage = Join-Path $env:RUNNER_TEMP "tracefox-windows-amd64"
-          $archive = Join-Path $env:GITHUB_WORKSPACE "tracefox-server-$version-windows-amd64.zip"
+          $archive = Join-Path $env:GITHUB_WORKSPACE "tracefox-server-$env:TRACEFOX_VERSION-windows-amd64.zip"
 
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           Copy-Item tracefox.cmd, README.md, LICENSE, .env.example -Destination $stage
@@ -38,13 +50,52 @@ jobs:
           New-Item -ItemType Directory -Path (Join-Path $stage ".tracefox") -Force | Out-Null
           Copy-Item .tracefox/runtime -Destination (Join-Path $stage ".tracefox") -Recurse
 
-          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $archive -CompressionLevel Optimal
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $stage,
+            $archive,
+            [System.IO.Compression.CompressionLevel]::Optimal,
+            $false
+          )
           $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           $name = Split-Path $archive -Leaf
           [System.IO.File]::WriteAllText("$archive.sha256", "$hash  $name`n")
 
           "TRACEFOX_ARCHIVE=$archive" | Out-File $env:GITHUB_ENV -Append
           "TRACEFOX_CHECKSUM=$archive.sha256" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Verify archive starts fully offline
+        shell: pwsh
+        run: |
+          $verify = Join-Path $env:RUNNER_TEMP "tracefox-release-verify"
+          Expand-Archive -LiteralPath $env:TRACEFOX_ARCHIVE -DestinationPath $verify
+
+          $required = @(
+            "tracefox.cmd",
+            ".tracefox\runtime\python\python.exe",
+            ".tracefox\runtime\victoriametrics\victoria-metrics-windows-amd64-prod.exe",
+            ".tracefox\runtime\grafana\bin\grafana.exe"
+          )
+          foreach ($relativePath in $required) {
+            if (-not (Test-Path -LiteralPath (Join-Path $verify $relativePath))) {
+              throw "Release archive is missing $relativePath."
+            }
+          }
+
+          Push-Location $verify
+          try {
+            & .\tracefox.cmd start
+            if ($LASTEXITCODE -ne 0) {
+              throw "Offline release start failed with exit code $LASTEXITCODE."
+            }
+            & .\.tracefox\runtime\python\python.exe windows\smoke_test.py
+            if ($LASTEXITCODE -ne 0) {
+              throw "Offline release smoke test failed with exit code $LASTEXITCODE."
+            }
+          } finally {
+            & .\tracefox.cmd stop
+            Pop-Location
+          }
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -55,17 +106,29 @@ jobs:
             ${{ env.TRACEFOX_CHECKSUM }}
           if-no-files-found: error
 
-      - name: Publish tag assets
-        if: github.ref_type == 'tag'
+      - name: Publish release assets
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view $env:GITHUB_REF_NAME *> $null
+          gh release view $env:TRACEFOX_VERSION *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $env:GITHUB_REF_NAME --verify-tag --generate-notes
+            if ($env:GITHUB_REF_TYPE -eq "tag") {
+              gh release create $env:TRACEFOX_VERSION `
+                --verify-tag `
+                --title "TraceFox $env:TRACEFOX_VERSION" `
+                --generate-notes
+            } else {
+              gh release create $env:TRACEFOX_VERSION `
+                --target $env:GITHUB_SHA `
+                --title "TraceFox $env:TRACEFOX_VERSION" `
+                --generate-notes
+            }
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to create release $env:TRACEFOX_VERSION."
+            }
           }
-          gh release upload $env:GITHUB_REF_NAME `
+          gh release upload $env:TRACEFOX_VERSION `
             $env:TRACEFOX_ARCHIVE `
             $env:TRACEFOX_CHECKSUM `
             --clobber

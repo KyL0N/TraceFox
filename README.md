@@ -106,6 +106,10 @@ sudo docker compose up -d
 
 支持 Windows 10/11 和 Windows Server 2019+ x64。克隆仓库或解压发布包后，只需运行：
 
+推荐直接从 [Releases](https://github.com/KyL0N/TraceFox/releases/latest) 下载
+`tracefox-server-<version>-windows-amd64.zip`。该压缩包已经包含经过 SHA256
+校验的完整运行时，解压后无需联网。
+
 ```powershell
 .\tracefox.cmd start
 ```
