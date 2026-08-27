@@ -98,6 +98,14 @@ jobs:
             Pop-Location
           }
 
+      - name: Upload release verification logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracefox-release-verification-logs
+          path: ${{ runner.temp }}/tracefox-release-verify/.tracefox/logs
+          if-no-files-found: ignore
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:

@@ -28,20 +28,26 @@ def get_json(url: str) -> dict:
 
 def wait_for_metric(timeout: float = 30.0) -> None:
     query = f'tracefox_up{{host="{HOST_LABEL}"}}'
-    url = "http://127.0.0.1:8428/api/v1/query?" + urlencode({"query": query})
+    url = "http://127.0.0.1:8428/api/v1/query?" + urlencode(
+        {"query": query, "latency_offset": "1s"}
+    )
     deadline = time.monotonic() + timeout
+    last_payload = None
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         while time.monotonic() < deadline:
             sock.sendto(make_frame(), ("127.0.0.1", 9000))
             try:
-                payload = get_json(url)
-                results = payload.get("data", {}).get("result", [])
+                last_payload = get_json(url)
+                results = last_payload.get("data", {}).get("result", [])
                 if results and results[0].get("value", [None, None])[1] == "1":
                     return
             except OSError:
                 pass
             time.sleep(1)
-    raise RuntimeError("TraceFox smoke metric did not reach VictoriaMetrics")
+    raise RuntimeError(
+        "TraceFox smoke metric did not reach VictoriaMetrics; "
+        f"last query response: {last_payload!r}"
+    )
 
 
 def main() -> None:
