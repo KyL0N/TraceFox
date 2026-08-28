@@ -4,6 +4,7 @@
 GCC      ?= gcc
 MODE     ?= release
 SANITIZE ?= 0
+STACK_PROTECTOR ?= 1
 
 IS_CLANG := $(shell $(GCC) -dM -E - < /dev/null 2>/dev/null | grep -c __clang__)
 STACK_CLASH_CFLAG := $(shell printf '' | $(GCC) -x c -c -o /dev/null -fstack-clash-protection - >/dev/null 2>&1 && printf '%s' -fstack-clash-protection)
@@ -16,12 +17,15 @@ CFLAGS  ?= -std=gnu2x -fdata-sections -ffunction-sections \
 		-Wshadow -Wpointer-arith -Wcast-align -Wstrict-prototypes \
 		-Wmissing-prototypes -Wmissing-declarations -Wmissing-field-initializers \
 		-Wredundant-decls -Wformat=2 \
-		-Wstack-protector \
 		-Wundef -Wwrite-strings -Wdouble-promotion \
 		-Wsign-conversion -Wconversion \
-		-fstack-protector-strong $(STACK_CLASH_CFLAG) -fno-common -fPIE \
+		$(STACK_CLASH_CFLAG) -fno-common -fPIE \
 		-D_DEFAULT_SOURCE \
 		-MMD -MP
+
+ifeq ($(STACK_PROTECTOR),1)
+CFLAGS += -Wstack-protector -fstack-protector-strong
+endif
 
 ifeq ($(IS_CLANG),0)
 CFLAGS += -Wformat-truncation=2 -Wformat-overflow=2 \

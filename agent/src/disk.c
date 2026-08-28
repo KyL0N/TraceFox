@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <inttypes.h>
 #include <time.h>
 
 #include "tracefox.h"
@@ -284,7 +285,7 @@ static void disk_print(struct tf_collector *col, FILE *out)
 	(void)fprintf(out, "DISK: count=%zu\n", ctx->count);
 	for (size_t i = 0; i < ctx->count; i++) {
 		(void)fprintf(out,
-		              "  - %s: cum(r=%lu,w=%lu,sr=%lu,sw=%lu,rm=%lu,wm=%lu) "
+		              "  - %s: cum(r=%" PRIu64 ",w=%" PRIu64 ",sr=%" PRIu64 ",sw=%" PRIu64 ",rm=%" PRIu64 ",wm=%" PRIu64 ") "
 		              "delta(iops_r=%u,iops_w=%u) util=%u.%1u%%%%\n",
 		              ctx->entries[i].name, ctx->entries[i].reads_completed, ctx->entries[i].writes_completed, ctx->entries[i].sectors_read,
 		              ctx->entries[i].sectors_written, ctx->entries[i].read_ms, ctx->entries[i].write_ms, ctx->entries[i].read_iops_delta,

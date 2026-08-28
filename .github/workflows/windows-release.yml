@@ -7,6 +7,7 @@ on:
       - "main"
     paths:
       - "VERSION"
+      - "agent/**"
 
 permissions:
   contents: read
@@ -127,6 +128,7 @@ jobs:
             elf_class: ELF32
             elf_machine: ARM
             qemu: qemu-arm-static
+            stack_protector: 1
           - target_arch: armv7
             bootlin_arch: armv7-eabihf
             libc: uclibc
@@ -135,6 +137,7 @@ jobs:
             elf_class: ELF32
             elf_machine: ARM
             qemu: qemu-arm-static
+            stack_protector: 0
           - target_arch: aarch64
             bootlin_arch: aarch64
             libc: glibc
@@ -143,6 +146,7 @@ jobs:
             elf_class: ELF64
             elf_machine: AArch64
             qemu: qemu-aarch64-static
+            stack_protector: 1
           - target_arch: aarch64
             bootlin_arch: aarch64
             libc: uclibc
@@ -151,6 +155,7 @@ jobs:
             elf_class: ELF64
             elf_machine: AArch64
             qemu: qemu-aarch64-static
+            stack_protector: 0
 
     steps:
       - uses: actions/checkout@v4
@@ -215,6 +220,7 @@ jobs:
           make -C agent \
             GCC="$TRACEFOX_CC" \
             MODE=release \
+            STACK_PROTECTOR=${{ matrix.stack_protector }} \
             LDFLAGS="-static -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,--build-id"
           "$TRACEFOX_STRIP" --strip-unneeded agent/bin/tracefox-agent
 
