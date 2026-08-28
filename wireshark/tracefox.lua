@@ -363,5 +363,7 @@ function tracefox.dissector(buffer, pinfo, tree)
 end
 
 local udp_port_table = DissectorTable.get("udp.port")
-udp_port_table:add(DEFAULT_UDP_PORT, tracefox)
+-- Port 9000 is present in Wireshark's built-in UDP table on some releases.
+-- Replace that entry so installing this plugin always enables TraceFox decoding.
+udp_port_table:set(DEFAULT_UDP_PORT, tracefox)
 udp_port_table:add_for_decode_as(tracefox)

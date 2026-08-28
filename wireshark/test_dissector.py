@@ -92,7 +92,11 @@ def _write_test_capture(path: Path) -> None:
             handle.write(packet)
 
 
-def _run_tshark(capture: Path, display_filter: str, fields: tuple[str, ...]) -> list[list[str]]:
+def _run_tshark(
+    capture: Path,
+    display_filter: str,
+    fields: tuple[str, ...],
+) -> tuple[list[list[str]], str]:
     command = [
         TSHARK,
         "-n",
@@ -114,7 +118,8 @@ def _run_tshark(capture: Path, display_filter: str, fields: tuple[str, ...]) -> 
 
     result = subprocess.run(command, check=False, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    return [line.split(",") for line in result.stdout.splitlines() if line]
+    rows = [line.split(",") for line in result.stdout.splitlines() if line]
+    return rows, result.stderr
 
 
 def _field_is_true(value: str) -> bool:
@@ -128,7 +133,18 @@ class TraceFoxDissectorTests(unittest.TestCase):
             capture = Path(temporary_directory) / "tracefox-gap.pcap"
             _write_test_capture(capture)
 
-            rows = _run_tshark(
+            udp_rows, udp_stderr = _run_tshark(
+                capture,
+                "udp.dstport == 9000",
+                ("frame.number",),
+            )
+            self.assertEqual(
+                udp_rows,
+                [["1"], ["2"], ["3"], ["4"]],
+                f"synthetic capture did not contain the expected UDP packets:\n{udp_stderr}",
+            )
+
+            rows, tracefox_stderr = _run_tshark(
                 capture,
                 "tracefox",
                 (
@@ -144,7 +160,11 @@ class TraceFoxDissectorTests(unittest.TestCase):
                 ),
             )
 
-            self.assertEqual(len(rows), 4)
+            self.assertEqual(
+                len(rows),
+                4,
+                f"TraceFox dissector did not decode every UDP packet:\n{tracefox_stderr}",
+            )
             self.assertEqual(rows[0][0:2], ["1", "100"])
             self.assertEqual(rows[0][8], "edge-a")
 
@@ -163,19 +183,19 @@ class TraceFoxDissectorTests(unittest.TestCase):
             self.assertTrue(_field_is_true(rows[3][5]))
             self.assertFalse(_field_is_true(rows[3][6]))
 
-            missing = _run_tshark(
+            missing, missing_stderr = _run_tshark(
                 capture,
                 "tracefox.missing_packets > 0",
                 ("frame.number",),
             )
-            self.assertEqual(missing, [["3"]])
+            self.assertEqual(missing, [["3"]], missing_stderr)
 
-            stalled = _run_tshark(
+            stalled, stalled_stderr = _run_tshark(
                 capture,
                 "tracefox.arrival_delta_seconds > 6 && tracefox.sequence_delta == 1",
                 ("frame.number",),
             )
-            self.assertEqual(stalled, [["4"]])
+            self.assertEqual(stalled, [["4"]], stalled_stderr)
 
 
 if __name__ == "__main__":
