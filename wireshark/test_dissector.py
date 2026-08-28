@@ -96,23 +96,31 @@ def _run_tshark(
     capture: Path,
     display_filter: str,
     fields: tuple[str, ...],
+    *,
+    decode_as: bool = False,
 ) -> tuple[list[list[str]], str]:
     command = [
         TSHARK,
         "-n",
         "-X",
         f"lua_script:{DISSECTOR}",
-        "-r",
-        str(capture),
-        "-Y",
-        display_filter,
-        "-T",
-        "fields",
-        "-E",
-        "separator=,",
-        "-E",
-        "occurrence=f",
     ]
+    if decode_as:
+        command.extend(("-d", "udp.port==9000,tracefox"))
+    command.extend(
+        (
+            "-r",
+            str(capture),
+            "-Y",
+            display_filter,
+            "-T",
+            "fields",
+            "-E",
+            "separator=,",
+            "-E",
+            "occurrence=f",
+        )
+    )
     for field in fields:
         command.extend(("-e", field))
 
@@ -144,6 +152,18 @@ class TraceFoxDissectorTests(unittest.TestCase):
                 f"synthetic capture did not contain the expected UDP packets:\n{udp_stderr}",
             )
 
+            forced_rows, forced_stderr = _run_tshark(
+                capture,
+                "tracefox",
+                ("frame.number",),
+                decode_as=True,
+            )
+            self.assertEqual(
+                forced_rows,
+                [["1"], ["2"], ["3"], ["4"]],
+                f"TraceFox Decode As failed:\n{forced_stderr}",
+            )
+
             rows, tracefox_stderr = _run_tshark(
                 capture,
                 "tracefox",
@@ -160,10 +180,21 @@ class TraceFoxDissectorTests(unittest.TestCase):
                 ),
             )
 
+            diagnostics, diagnostic_stderr = _run_tshark(
+                capture,
+                "udp.dstport == 9000",
+                (
+                    "frame.number",
+                    "_ws.col.Protocol",
+                    "frame.protocols",
+                    "_ws.expert.message",
+                ),
+            )
             self.assertEqual(
                 len(rows),
                 4,
-                f"TraceFox dissector did not decode every UDP packet:\n{tracefox_stderr}",
+                "TraceFox dissector did not decode every UDP packet:\n"
+                f"{tracefox_stderr}{diagnostic_stderr}\n{diagnostics!r}",
             )
             self.assertEqual(rows[0][0:2], ["1", "100"])
             self.assertEqual(rows[0][8], "edge-a")

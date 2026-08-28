@@ -179,7 +179,8 @@ local function make_stream_key(pinfo, host_label)
     if identity == nil or identity == "" then
         identity = tostring(pinfo.src)
     end
-    return string.format("%s -> %s:%d", identity, tostring(pinfo.dst), pinfo.dst_port)
+    local destination_port = tonumber(pinfo.dst_port) or 0
+    return string.format("%s -> %s:%d", identity, tostring(pinfo.dst), destination_port)
 end
 
 local function forward_sequence_delta(previous, current)
@@ -209,7 +210,8 @@ local function analyse_frame(pinfo, stream_key, timestamp, sequence)
         duplicate_sequence = false,
         arrival_gap = false,
     }
-    local capture_time = pinfo.abs_ts:tonumber()
+    local capture_timestamp = pinfo.abs_ts
+    local capture_time = capture_timestamp.secs + (capture_timestamp.nsecs / 1000000000)
     local previous = stream_states[stream_key]
 
     if previous ~= nil and frame_number > previous.frame_number then
@@ -282,11 +284,20 @@ function tracefox.dissector(buffer, pinfo, tree)
 
     local timestamp = buffer(4, 4):uint()
     local sequence = buffer(8, 4):uint()
+    local root = tree:add(tracefox, buffer())
+    root:append_text(string.format(", seq=%d", sequence))
+    root:add(f_magic, buffer(0, 2))
+    root:add(f_version, buffer(2, 1))
+    root:add(f_reserved, buffer(3, 1))
+    root:add(f_timestamp, buffer(4, 4))
+    add_generated(root, f_timestamp_utc, NSTime.new(timestamp, 0))
+    root:add(f_sequence, buffer(8, 4))
+
     local tlvs, host_label = scan_tlvs(buffer)
     local stream_key = make_stream_key(pinfo, host_label)
     local analysis = analyse_frame(pinfo, stream_key, timestamp, sequence)
 
-    pinfo.cols.protocol = "TFOX"
+    pinfo.cols.protocol:set("TFOX")
     local info = { string.format("v%d seq=%d", version, sequence) }
     if host_label ~= nil and host_label ~= "" then
         table.insert(info, "host=" .. host_label)
@@ -302,16 +313,7 @@ function tracefox.dissector(buffer, pinfo, tree)
     if analysis.arrival_gap and analysis.arrival_delta ~= nil then
         table.insert(info, string.format("GAP=%.3fs", analysis.arrival_delta))
     end
-    pinfo.cols.info = table.concat(info, " ")
-
-    local root = tree:add(tracefox, buffer())
-    root:append_text(string.format(", seq=%d", sequence))
-    root:add(f_magic, buffer(0, 2))
-    root:add(f_version, buffer(2, 1))
-    root:add(f_reserved, buffer(3, 1))
-    root:add(f_timestamp, buffer(4, 4))
-    add_generated(root, f_timestamp_utc, NSTime.new(timestamp, 0))
-    root:add(f_sequence, buffer(8, 4))
+    pinfo.cols.info:set(table.concat(info, " "))
 
     for _, entry in ipairs(tlvs) do
         add_tlv_tree(root, buffer, entry)
@@ -367,3 +369,4 @@ local udp_port_table = DissectorTable.get("udp.port")
 -- Replace that entry so installing this plugin always enables TraceFox decoding.
 udp_port_table:set(DEFAULT_UDP_PORT, tracefox)
 udp_port_table:add_for_decode_as(tracefox)
+tracefox:register_heuristic("udp", tracefox.dissector)
