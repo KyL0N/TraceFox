@@ -190,6 +190,10 @@ class TraceFoxDissectorTests(unittest.TestCase):
                     "_ws.expert.message",
                 ),
             )
+            self.assertFalse(
+                any("Lua Error" in ",".join(row) for row in diagnostics),
+                f"Lua dissector error:\n{diagnostic_stderr}\n{diagnostics!r}",
+            )
             self.assertEqual(
                 len(rows),
                 4,
@@ -197,7 +201,7 @@ class TraceFoxDissectorTests(unittest.TestCase):
                 f"{tracefox_stderr}{diagnostic_stderr}\n{diagnostics!r}",
             )
             self.assertEqual(rows[0][0:2], ["1", "100"])
-            self.assertEqual(rows[0][8], "edge-a")
+            self.assertEqual(rows[0][8], "edge-a", f"{rows!r}\n{diagnostics!r}")
 
             self.assertAlmostEqual(float(rows[1][2]), 5.0)
             self.assertEqual([int(rows[1][3]), int(rows[1][4])], [1, 0])

@@ -264,7 +264,8 @@ local function add_tlv_tree(root, buffer, entry)
         tlv_tree:add(f_tlv_value, buffer(entry.value_offset, entry.value_length))
     end
     if entry.type == 0x03 and entry.malformed == nil and entry.length > 0 then
-        tlv_tree:add(f_host_label, buffer(entry.value_offset, entry.length))
+        local host_range = buffer(entry.value_offset, entry.length)
+        tlv_tree:add(f_host_label, host_range, host_range:string())
     end
     if entry.malformed ~= nil then
         tlv_tree:add_proto_expert_info(ex_malformed_tlv, entry.malformed)
