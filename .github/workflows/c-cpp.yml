@@ -62,11 +62,15 @@ jobs:
       - name: Install Python validation dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pytest python3-yaml
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y python3-pytest python3-yaml tshark
 
       - name: Run Python Protocol Tests
         run: |
           python3 -m pytest server/test_protocol.py -v
+
+      - name: Run Wireshark Dissector Tests
+        run: |
+          python3 wireshark/test_dissector.py -v
 
       - name: Run Agent Thread Capture Smoke Test
         run: |

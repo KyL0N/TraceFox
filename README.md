@@ -48,6 +48,9 @@ TraceFox/
 │       ├── datasources/datasource.yml  VictoriaMetrics 数据源
 │       ├── dashboards/dashboard.yml    大盘自动加载配置
 │       └── alerting/rules.yml          告警规则（CPU/MEM/Disk/FS/Agent Down）
+├── wireshark/
+│   ├── tracefox.lua             TFOX v2 协议解析与序列断档检测
+│   └── README.md                安装方法与诊断过滤器
 ├── docker-compose.yml          一键部署（Forwarder + VM + Grafana）
 ├── .env.example                环境变量模板
 └── .gitignore
@@ -80,6 +83,22 @@ TLV 体：`Type(1) + Length(1) + Value(变长)`
 单帧始终 < 1400 字节，避免 MTU 分片。
 
 `0x08` 使用独立 TLV，不改变现有 `0x07` 布局；不了解线程 TLV 的旧服务端会直接跳过它。每个进程组使用一个 `0x08` TLV，Agent 会在剩余帧预算不足时缩减 Top-N，并通过 `truncated` 指标暴露截断状态。
+
+## Wireshark 断档诊断
+
+仓库自带 [`wireshark/tracefox.lua`](wireshark/tracefox.lua)，安装后会自动解析
+UDP 9000 上的 TFOX v2 报文，并显示 `timestamp`、`seq`、相邻到达间隔、序列
+增量及缺包数。常用过滤器：
+
+```wireshark
+tracefox
+tracefox.arrival_delta_seconds > 6
+tracefox.missing_packets > 0
+tracefox.arrival_delta_seconds > 6 && tracefox.sequence_delta == 1
+```
+
+完整安装步骤、字段说明和自定义端口用法见
+[`wireshark/README.md`](wireshark/README.md)。
 
 ## 快速开始
 
