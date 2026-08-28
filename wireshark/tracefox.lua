@@ -210,8 +210,10 @@ local function analyse_frame(pinfo, stream_key, timestamp, sequence)
         duplicate_sequence = false,
         arrival_gap = false,
     }
-    local capture_timestamp = pinfo.abs_ts
-    local capture_time = capture_timestamp.secs + (capture_timestamp.nsecs / 1000000000)
+    local capture_time = tonumber(pinfo.abs_ts)
+    if capture_time == nil then
+        capture_time = pinfo.abs_ts:tonumber()
+    end
     local previous = stream_states[stream_key]
 
     if previous ~= nil and frame_number > previous.frame_number then
