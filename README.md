@@ -93,6 +93,19 @@ make debug              # 调试构建（含 -g -O0）
 
 产物：`agent/bin/tracefox-agent`
 
+也可以从 [Releases](https://github.com/KyL0N/TraceFox/releases/latest) 直接下载
+静态链接的 Linux Agent。每个压缩包都包含 `tracefox-agent`、示例配置、README、
+LICENSE 和 VERSION，并提供独立的 `.sha256` 校验文件：
+
+| 架构 | libc 变体 | Release 文件名 |
+|------|-----------|----------------|
+| ARMv7 32 位（EABI hard-float） | glibc / uClibc-ng | `tracefox-agent-<version>-linux-armv7-{glibc,uclibc}.tar.gz` |
+| AArch64 64 位 | glibc / uClibc-ng | `tracefox-agent-<version>-linux-aarch64-{glibc,uclibc}.tar.gz` |
+
+四个 Agent 都是不依赖目标机动态加载器或共享库的静态 ELF，因此不要求目标机
+预装同名 libc。解压后编辑 `config/agent.conf`，再运行 `./tracefox-agent` 即可。
+通常先选 glibc 变体；面向老旧或精简嵌入式固件时，也可以使用 uClibc-ng 变体。
+
 ### 2. 部署服务端（Docker Compose）
 
 ```bash

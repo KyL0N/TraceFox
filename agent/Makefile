@@ -6,6 +6,7 @@ MODE     ?= release
 SANITIZE ?= 0
 
 IS_CLANG := $(shell $(GCC) -dM -E - < /dev/null 2>/dev/null | grep -c __clang__)
+STACK_CLASH_CFLAG := $(shell printf '' | $(GCC) -x c -c -o /dev/null -fstack-clash-protection - >/dev/null 2>&1 && printf '%s' -fstack-clash-protection)
 
 # -----------------------------
 # CFLAGS
@@ -18,7 +19,7 @@ CFLAGS  ?= -std=gnu2x -fdata-sections -ffunction-sections \
 		-Wstack-protector \
 		-Wundef -Wwrite-strings -Wdouble-promotion \
 		-Wsign-conversion -Wconversion \
-		-fstack-protector-strong -fstack-clash-protection -fno-common -fPIE \
+		-fstack-protector-strong $(STACK_CLASH_CFLAG) -fno-common -fPIE \
 		-D_DEFAULT_SOURCE \
 		-MMD -MP
 
@@ -38,7 +39,7 @@ LDFLAGS ?= -static-pie -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,-z,noexecstack 
 ifeq ($(MODE),debug)
 	CFLAGS += -g -O0 -DDEBUG
 	# remove static link for debug
-	LDFLAGS := $(filter-out -static-pie,$(LDFLAGS))
+	LDFLAGS := $(filter-out -static -static-pie,$(LDFLAGS))
 else
 	CFLAGS += -Os -g -flto -D_FORTIFY_SOURCE=2
 	LDFLAGS += -flto
@@ -47,10 +48,10 @@ endif
 ifeq ($(SANITIZE),1)
 	CFLAGS += -fsanitize=address -fsanitize=undefined
 	LDFLAGS += -fsanitize=address -fsanitize=undefined
-	LDFLAGS := $(filter-out -static-pie,$(LDFLAGS))
+	LDFLAGS := $(filter-out -static -static-pie,$(LDFLAGS))
 endif
 
-ifneq ($(filter -static-pie,$(LDFLAGS)),)
+ifneq ($(filter -static -static-pie,$(LDFLAGS)),)
 	CFLAGS += -DTF_STATIC_BUILD=1
 endif
 

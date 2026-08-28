@@ -1,4 +1,4 @@
-name: Windows Portable Release
+name: TraceFox Release
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
       - "VERSION"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   package-windows:
@@ -105,32 +105,263 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tracefox-windows-amd64
+          name: release-windows-amd64
           path: |
             ${{ env.TRACEFOX_ARCHIVE }}
             ${{ env.TRACEFOX_CHECKSUM }}
           if-no-files-found: error
 
+  package-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_arch: armv7
+            bootlin_arch: armv7-eabihf
+            libc: glibc
+            toolchain: armv7-eabihf--glibc--stable-2023.11-1
+            toolchain_sha256: d0a575b156e5c481dbe079cd3e292fb8eefed39392a90cdde871e7b9e77fd420
+            elf_class: ELF32
+            elf_machine: ARM
+            qemu: qemu-arm-static
+          - target_arch: armv7
+            bootlin_arch: armv7-eabihf
+            libc: uclibc
+            toolchain: armv7-eabihf--uclibc--stable-2023.11-1
+            toolchain_sha256: 39fcb1928454392112f0a5168b2e284d3564a24dff116efdcb71c67b672682ca
+            elf_class: ELF32
+            elf_machine: ARM
+            qemu: qemu-arm-static
+          - target_arch: aarch64
+            bootlin_arch: aarch64
+            libc: glibc
+            toolchain: aarch64--glibc--stable-2023.11-1
+            toolchain_sha256: 5b1fde169c9ed678ee75a729286531a291c6ce5ee9d8a8b598b3abbef35c05f2
+            elf_class: ELF64
+            elf_machine: AArch64
+            qemu: qemu-aarch64-static
+          - target_arch: aarch64
+            bootlin_arch: aarch64
+            libc: uclibc
+            toolchain: aarch64--uclibc--stable-2023.11-1
+            toolchain_sha256: 82fe36e1c02f9662bd3ad59267ba3ae850d67e9e09a1d229ec3f25b691da0065
+            elf_class: ELF64
+            elf_machine: AArch64
+            qemu: qemu-aarch64-static
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "VERSION must be a semantic version beginning with v; got '$version'." >&2
+            exit 1
+          fi
+          echo "TRACEFOX_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Install emulation dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
+
+      - name: Download pinned cross toolchain
+        shell: bash
+        env:
+          TOOLCHAIN_NAME: ${{ matrix.toolchain }}
+          TOOLCHAIN_SHA256: ${{ matrix.toolchain_sha256 }}
+          BOOTLIN_ARCH: ${{ matrix.bootlin_arch }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/$TOOLCHAIN_NAME.tar.bz2"
+          toolchain_dir="$RUNNER_TEMP/toolchain"
+          url="https://toolchains.bootlin.com/downloads/releases/toolchains/$BOOTLIN_ARCH/tarballs/$TOOLCHAIN_NAME.tar.bz2"
+
+          curl --fail --location --retry 3 --retry-all-errors --output "$archive" "$url"
+          echo "$TOOLCHAIN_SHA256  $archive" | sha256sum --check --strict
+
+          mkdir -p "$toolchain_dir"
+          tar -xjf "$archive" -C "$toolchain_dir" --strip-components=1
+
+          compiler="$(find "$toolchain_dir/bin" -maxdepth 1 \( -type f -o -type l \) -name '*-gcc' -print -quit)"
+          if [[ -z "$compiler" || ! -x "$compiler" ]]; then
+            echo "Unable to locate the cross compiler in $toolchain_dir/bin." >&2
+            exit 1
+          fi
+
+          tool_prefix="${compiler%-gcc}"
+          for tool in "$compiler" "$tool_prefix-strip" "$tool_prefix-readelf"; do
+            if [[ ! -x "$tool" ]]; then
+              echo "Required cross tool is missing: $tool" >&2
+              exit 1
+            fi
+          done
+
+          echo "TRACEFOX_CC=$compiler" >> "$GITHUB_ENV"
+          echo "TRACEFOX_STRIP=$tool_prefix-strip" >> "$GITHUB_ENV"
+          echo "TRACEFOX_READELF=$tool_prefix-readelf" >> "$GITHUB_ENV"
+
+      - name: Build static Agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C agent clean
+          make -C agent \
+            GCC="$TRACEFOX_CC" \
+            MODE=release \
+            LDFLAGS="-static -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,--build-id"
+          "$TRACEFOX_STRIP" --strip-unneeded agent/bin/tracefox-agent
+
+      - name: Verify architecture and static linkage
+        shell: bash
+        env:
+          EXPECTED_CLASS: ${{ matrix.elf_class }}
+          EXPECTED_MACHINE: ${{ matrix.elf_machine }}
+        run: |
+          set -euo pipefail
+          binary=agent/bin/tracefox-agent
+          header="$($TRACEFOX_READELF --file-header "$binary")"
+          program_headers="$($TRACEFOX_READELF --program-headers "$binary")"
+          dynamic="$($TRACEFOX_READELF --dynamic "$binary" 2>&1 || true)"
+
+          grep -Eq "Class:[[:space:]]+$EXPECTED_CLASS" <<< "$header"
+          grep -Eq "Machine:[[:space:]]+$EXPECTED_MACHINE" <<< "$header"
+          if grep -q 'INTERP' <<< "$program_headers"; then
+            echo "Binary unexpectedly contains a program interpreter." >&2
+            exit 1
+          fi
+          if grep -q '(NEEDED)' <<< "$dynamic"; then
+            echo "Binary unexpectedly contains a shared-library dependency." >&2
+            exit 1
+          fi
+          file "$binary" | tee "$RUNNER_TEMP/tracefox-agent.file"
+          grep -q 'statically linked' "$RUNNER_TEMP/tracefox-agent.file"
+
+      - name: Smoke-test target binary with QEMU
+        shell: bash
+        env:
+          QEMU: ${{ matrix.qemu }}
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/agent.conf"
+          capture="$RUNNER_TEMP/capture.tfox"
+          printf '%s\n' \
+            'server_host=127.0.0.1' \
+            'server_port=9000' \
+            'interval=1' \
+            'host_label=release-smoke' \
+            'proc_prefix=' \
+            'thread_mode=off' > "$config"
+
+          set +e
+          timeout --signal=TERM --kill-after=2s 3s \
+            "$QEMU" agent/bin/tracefox-agent -c "$config" -f "$capture"
+          status=$?
+          set -e
+          if [[ $status -ne 0 && $status -ne 124 ]]; then
+            echo "QEMU smoke test failed with exit code $status." >&2
+            exit "$status"
+          fi
+          if [[ "$(head -c 4 "$capture")" != 'TFOX' ]]; then
+            echo "QEMU smoke test did not produce a TraceFox capture." >&2
+            exit 1
+          fi
+
+      - name: Assemble Agent archive
+        shell: bash
+        env:
+          TARGET_ARCH: ${{ matrix.target_arch }}
+          TARGET_LIBC: ${{ matrix.libc }}
+        run: |
+          set -euo pipefail
+          package_name="tracefox-agent-$TRACEFOX_VERSION-linux-$TARGET_ARCH-$TARGET_LIBC"
+          stage="$RUNNER_TEMP/$package_name"
+          archive="$GITHUB_WORKSPACE/$package_name.tar.gz"
+
+          install -Dm755 agent/bin/tracefox-agent "$stage/tracefox-agent"
+          install -Dm644 agent/config/agent.conf "$stage/config/agent.conf"
+          install -Dm644 README.md "$stage/README.md"
+          install -Dm644 LICENSE "$stage/LICENSE"
+          install -Dm644 VERSION "$stage/VERSION"
+
+          tar \
+            --sort=name \
+            --mtime='UTC 2020-01-01' \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            -czf "$archive" \
+            -C "$RUNNER_TEMP" \
+            "$package_name"
+          sha256sum "$(basename "$archive")" > "$archive.sha256"
+
+          echo "TRACEFOX_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "TRACEFOX_CHECKSUM=$archive.sha256" >> "$GITHUB_ENV"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-agent-${{ matrix.target_arch }}-${{ matrix.libc }}
+          path: |
+            ${{ env.TRACEFOX_ARCHIVE }}
+            ${{ env.TRACEFOX_CHECKSUM }}
+          if-no-files-found: error
+
+  publish-release:
+    needs:
+      - package-windows
+      - package-agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          mapfile -t checksums < <(find . -maxdepth 1 -type f -name '*.sha256' -printf '%f\n' | sort)
+          if [[ ${#checksums[@]} -ne 5 ]]; then
+            echo "Expected 5 checksum files, found ${#checksums[@]}." >&2
+            exit 1
+          fi
+          for checksum in "${checksums[@]}"; do
+            sha256sum --check --strict "$checksum"
+          done
+
       - name: Publish release assets
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $existingTarget = gh release view $env:TRACEFOX_VERSION --json targetCommitish --jq .targetCommitish 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            if ($existingTarget.Trim() -ne $env:GITHUB_SHA) {
-              throw "Release $env:TRACEFOX_VERSION targets $existingTarget, not $env:GITHUB_SHA; refusing to replace assets from another commit."
-            }
-          } else {
-            gh release create $env:TRACEFOX_VERSION `
-              --target $env:GITHUB_SHA `
-              --title "TraceFox $env:TRACEFOX_VERSION" `
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          if existing_target="$(gh release view "$version" --json targetCommitish --jq .targetCommitish 2>/dev/null)"; then
+            if [[ "$existing_target" != "$GITHUB_SHA" ]]; then
+              echo "Release $version targets $existing_target, not $GITHUB_SHA; refusing to replace assets from another commit." >&2
+              exit 1
+            fi
+          else
+            gh release create "$version" \
+              --target "$GITHUB_SHA" \
+              --title "TraceFox $version" \
               --generate-notes
-            if ($LASTEXITCODE -ne 0) {
-              throw "Failed to create release $env:TRACEFOX_VERSION."
-            }
-          }
-          gh release upload $env:TRACEFOX_VERSION `
-            $env:TRACEFOX_ARCHIVE `
-            $env:TRACEFOX_CHECKSUM `
-            --clobber
+          fi
+          gh release upload "$version" dist/* --clobber
